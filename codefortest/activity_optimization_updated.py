@@ -9,7 +9,8 @@ import matplotlib.pyplot as plt
 import time
 from datetime import datetime
 from fit_CNN import parse_sim_experiment_file
-from visualize_firing_rates import visualize_firing_rates_raster, visualize_firing_rates_heatmap
+from utils.visualization_utils import visualize_firing_rates_trace, visualize_firing_rates_heatmap
+
 
 def _enable_gpu_memory_growth():
     """
@@ -1010,7 +1011,7 @@ def main():
     
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-    save_dir = f'./Results/activity_optimization_results/{timestamp}'
+    save_dir = f'./results/activity_optimization_results/{timestamp}'
     
     # 检查初始firing rates文件是否存在
     if not os.path.exists(init_firing_rates_path):
@@ -1083,7 +1084,7 @@ def main():
             print(f"包含fixed_exc_indices: {fixed_exc_indices}")
         
         # Raster plot
-        visualize_firing_rates_raster(
+        visualize_firing_rates_trace(
             firing_rates=optimized_sample,
             num_exc_segments=639,
             save_path=os.path.join(save_dir, 'optimized_firing_rates_raster.png'),

@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 import os
 
-def visualize_firing_rates_raster(firing_rates, num_exc_segments=640, save_path=None, 
+def visualize_firing_rates_trace(firing_rates, num_exc_segments=640, save_path=None, 
                                  title="Firing Rates Visualization", figsize=(18, 12), 
                                  time_step_ms=1, max_segments_to_show=200, specified_segments=None):
     """
@@ -467,7 +467,7 @@ def demo_visualization():
     # 1. 类似raster plot的可视化
     print("\n1. 生成类似raster plot的可视化...")
     raster_save_path = os.path.join(save_dir, "firing_rates_raster_demo.png")
-    stats = visualize_firing_rates_raster(
+    stats = visualize_firing_rates_trace(
         firing_rates=firing_rates,
         num_exc_segments=num_exc_segments,
         save_path=raster_save_path,
@@ -498,10 +498,11 @@ if __name__ == "__main__":
     print()
     print("# 假设你的firing_rates是 (1279, 310) 的numpy数组")
     print("# 前639个segments是兴奋性，后640个是抑制性")
-    print("from visualize_firing_rates import visualize_firing_rates_raster, visualize_firing_rates_heatmap")
+    print("from utils.visualization_utils import visualize_firing_rates_trace, visualize_firing_rates_heatmap
+")
     print()
     print("# 类似raster plot的可视化")
-    print("visualize_firing_rates_raster(")
+    print("visualize_firing_rates_trace(")
     print("    firing_rates=your_firing_rates,")
     print("    num_exc_segments=639,")
     print("    save_path='your_output_path.png',")

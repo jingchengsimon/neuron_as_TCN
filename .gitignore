@@ -47,6 +47,7 @@ Data/
 .history/
 
 # Jupyter Notebook
+.ipynb
 .ipynb_checkpoints
 
 # Environment
@@ -81,3 +82,15 @@ logs/
 # Temporary files
 *.tmp
 *.temp 
+
+# Large files
+*.npy
+*.h5
+*.pkl
+*.pth
+*.pt
+*.bin
+*.dat
+
+# Results
+results/

@@ -11,7 +11,8 @@ from pytorch_activity_optimizer import PytorchActivityOptimizer
 
 # 尝试导入可视化模块，如果不存在则跳过
 try:
-    from visualize_firing_rates import visualize_firing_rates_raster, visualize_firing_rates_heatmap
+    from utils.visualization_utils import visualize_firing_rates_trace, visualize_firing_rates_heatmap
+
     VISUALIZATION_AVAILABLE = True
 except ImportError:
     VISUALIZATION_AVAILABLE = False
@@ -159,7 +160,7 @@ def main():
     init_firing_rates_path = './init_firing_rate_array.npy'  # 初始firing rates文件
     
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    save_dir = f'./Results/pytorch_activity_optimization_results/{timestamp}'
+    save_dir = f'./results/pytorch_activity_optimization_results/{timestamp}'
     
     # 检查初始firing rates文件是否存在
     if not os.path.exists(init_firing_rates_path):
@@ -238,7 +239,7 @@ def main():
                 print(f"包含fixed_exc_indices: {fixed_exc_indices}")
             
             # Raster plot
-            visualize_firing_rates_raster(
+            visualize_firing_rates_trace(
                 firing_rates=optimized_sample,
                 num_exc_segments=639,
                 save_path=os.path.join(save_dir, 'optimized_firing_rates_raster.png'),

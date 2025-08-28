@@ -1,9 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib.lines import Line2D
 import os
 
-def visualize_firing_rates_raster(firing_rates, num_exc_segments=640, save_path=None, 
+def visualize_firing_rates_trace(firing_rates, num_exc_segments=640, save_path=None, 
                                  title="Firing Rates Visualization", figsize=(18, 12), 
                                  time_step_ms=1, max_segments_to_show=200, specified_segments=None):
     """
@@ -490,7 +489,7 @@ def demo_visualization():
     # 1. 类似raster plot的可视化
     print("\n1. 生成类似raster plot的可视化...")
     raster_save_path = os.path.join(save_dir, "firing_rates_raster_demo.png")
-    stats = visualize_firing_rates_raster(
+    stats = visualize_firing_rates_trace(
         firing_rates=firing_rates,
         num_exc_segments=num_exc_segments,
         save_path=raster_save_path,
@@ -512,6 +511,372 @@ def demo_visualization():
     print(f"\n演示完成！图片已保存到: {save_dir}")
     return firing_rates
 
+# 添加优化过程相关的可视化函数
+
+def plot_loss_history(loss_history, title="Activity Optimization Loss History", 
+                     figsize=(10, 6), save_path=None, show_plot=False):
+    """
+    绘制损失历史曲线
+    
+    Args:
+        loss_history: 损失历史列表
+        title: 图片标题
+        figsize: 图片大小
+        save_path: 保存路径
+        show_plot: 是否显示图片
+    """
+    plt.figure(figsize=figsize)
+    plt.plot(loss_history, linewidth=1.5, color='blue', alpha=0.8)
+    plt.title(title, fontsize=14, fontweight='bold')
+    plt.xlabel('Iteration', fontsize=12)
+    plt.ylabel('Loss', fontsize=12)
+    plt.grid(True, alpha=0.3)
+    
+    # 添加统计信息
+    if len(loss_history) > 0:
+        final_loss = loss_history[-1]
+        min_loss = min(loss_history)
+        improvement = loss_history[0] - final_loss
+        
+        stats_text = f"Final Loss: {final_loss:.6f}\n"
+        stats_text += f"Min Loss: {min_loss:.6f}\n"
+        stats_text += f"Improvement: {improvement:.6f}"
+        
+        plt.text(0.02, 0.98, stats_text, transform=plt.gca().transAxes, 
+                fontsize=10, verticalalignment='top',
+                bbox=dict(boxstyle='round', facecolor='lightblue', alpha=0.8))
+    
+    plt.tight_layout()
+    
+    # 保存或显示
+    if save_path:
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        print(f"损失历史图已保存到: {save_path}")
+    
+    if show_plot:
+        plt.show()
+    
+    plt.close()
+    
+    return save_path
+
+def plot_firing_rates_evolution(firing_rates_history, num_segments_exc, num_segments_inh, 
+                               time_duration_ms, input_window_size, title="Firing Rates Evolution",
+                               figsize=(15, 10), save_path=None, show_plot=False):
+    """
+    绘制firing rates随迭代的变化
+    
+    Args:
+        firing_rates_history: firing rates历史列表
+        num_segments_exc: 兴奋性segments数量
+        num_segments_inh: 抑制性segments数量
+        time_duration_ms: 时间长度
+        input_window_size: 输入窗口大小
+        title: 图片标题
+        figsize: 图片大小
+        save_path: 保存路径
+        show_plot: 是否显示图片
+    """
+    if not firing_rates_history:
+        print("警告: firing_rates_history为空，跳过绘制")
+        return None
+    
+    fig, axes = plt.subplots(2, 2, figsize=figsize)
+    
+    # 选择几个时间点和segments进行可视化
+    sample_times = [50, input_window_size // 2, 250]  # 50ms, half window size, 250ms
+    sample_segments = [0, num_segments_exc//2, num_segments_exc, 
+                      num_segments_exc + num_segments_inh//2]
+    
+    for i, (ax, segment_idx) in enumerate(zip(axes.flat, sample_segments)):
+        if i < len(sample_segments):
+            for time_idx in sample_times:
+                if time_idx < time_duration_ms:
+                    values = [fr[0, segment_idx, time_idx] for fr in firing_rates_history]
+                    ax.plot(range(0, len(firing_rates_history)*10, 10), values, 
+                           label=f'Time {time_idx}ms', linewidth=1.5, alpha=0.8)
+            
+            segment_type = "Exc" if segment_idx < num_segments_exc else "Inh"
+            ax.set_title(f'Segment {segment_idx} ({segment_type})', fontsize=12, fontweight='bold')
+            ax.set_xlabel('Iteration', fontsize=10)
+            ax.set_ylabel('Firing Rate', fontsize=10)
+            ax.legend(fontsize=9)
+            ax.grid(True, alpha=0.3)
+            
+            # 添加统计信息
+            if firing_rates_history:
+                final_values = [fr[0, segment_idx, time_idx] for fr in firing_rates_history 
+                              for time_idx in sample_times if time_idx < time_duration_ms]
+                if final_values:
+                    mean_val = np.mean(final_values)
+                    ax.text(0.02, 0.98, f'Mean: {mean_val:.4f}', 
+                           transform=ax.transAxes, fontsize=9,
+                           bbox=dict(boxstyle='round', facecolor='lightyellow', alpha=0.8))
+    
+    # 设置总标题
+    fig.suptitle(title, fontsize=16, fontweight='bold')
+    plt.tight_layout()
+    plt.subplots_adjust(top=0.93)
+    
+    # 保存或显示
+    if save_path:
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        print(f"Firing rates演化图已保存到: {save_path}")
+    
+    if show_plot:
+        plt.show()
+    
+    plt.close()
+    
+    return save_path
+
+def plot_optimization_summary(loss_history, firing_rates_history, num_segments_exc, 
+                             num_segments_inh, time_duration_ms, input_window_size,
+                             title="Optimization Summary", figsize=(20, 12), 
+                             save_path=None, show_plot=False):
+    """
+    绘制优化过程总结图，包含多个子图
+    
+    Args:
+        loss_history: 损失历史
+        firing_rates_history: firing rates历史
+        num_segments_exc: 兴奋性segments数量
+        num_segments_inh: 抑制性segments数量
+        time_duration_ms: 时间长度
+        input_window_size: 输入窗口大小
+        title: 图片标题
+        figsize: 图片大小
+        save_path: 保存路径
+        show_plot: 是否显示图片
+    """
+    fig = plt.figure(figsize=figsize)
+    
+    # 创建网格布局
+    gs = fig.add_gridspec(3, 3, hspace=0.3, wspace=0.3)
+    
+    # 1. 损失历史 (左上角，跨越2行)
+    ax1 = fig.add_subplot(gs[0:2, 0])
+    ax1.plot(loss_history, linewidth=2, color='blue', alpha=0.8)
+    ax1.set_title('Loss History', fontsize=12, fontweight='bold')
+    ax1.set_xlabel('Iteration')
+    ax1.set_ylabel('Loss')
+    ax1.grid(True, alpha=0.3)
+    
+    # 添加损失统计
+    if len(loss_history) > 0:
+        final_loss = loss_history[-1]
+        min_loss = min(loss_history)
+        improvement = loss_history[0] - final_loss
+        stats_text = f"Final: {final_loss:.6f}\nMin: {min_loss:.6f}\nImp: {improvement:.6f}"
+        ax1.text(0.02, 0.98, stats_text, transform=ax1.transAxes, fontsize=9,
+                verticalalignment='top', bbox=dict(boxstyle='round', facecolor='lightblue', alpha=0.8))
+    
+    # 2. Firing rates演化 (右上角，跨越2行)
+    if firing_rates_history:
+        ax2 = fig.add_subplot(gs[0:2, 1])
+        # 选择代表性segments
+        sample_segments = [0, num_segments_exc//2, num_segments_exc, 
+                         num_segments_exc + num_segments_inh//2]
+        sample_times = [input_window_size // 2]  # 只显示关键时间点
+        
+        for segment_idx in sample_segments:
+            if segment_idx < len(firing_rates_history[0][0]):
+                values = [fr[0, segment_idx, sample_times[0]] for fr in firing_rates_history 
+                         if sample_times[0] < time_duration_ms]
+                if values:
+                    segment_type = "Exc" if segment_idx < num_segments_exc else "Inh"
+                    color = 'blue' if segment_idx < num_segments_exc else 'red'
+                    ax2.plot(range(0, len(values)*10, 10), values, 
+                            label=f'{segment_type} {segment_idx}', color=color, alpha=0.8)
+        
+        ax2.set_title('Firing Rates Evolution', fontsize=12, fontweight='bold')
+        ax2.set_xlabel('Iteration')
+        ax2.set_ylabel('Firing Rate')
+        ax2.legend(fontsize=8)
+        ax2.grid(True, alpha=0.3)
+    
+    # 3. 最终firing rates分布 (右下角)
+    if firing_rates_history:
+        ax3 = fig.add_subplot(gs[0:2, 2])
+        final_rates = firing_rates_history[-1][0]  # 取最后一个batch的第一个样本
+        
+        # 兴奋性和抑制性segments的分布
+        exc_rates = final_rates[:num_segments_exc, :]
+        inh_rates = final_rates[num_segments_inh:, :]
+        
+        # 计算每个segment的平均firing rate
+        exc_means = np.mean(exc_rates, axis=1)
+        inh_means = np.mean(inh_rates, axis=1)
+        
+        # 绘制分布
+        ax3.hist(exc_means, bins=30, alpha=0.7, color='blue', label='Excitatory', density=True)
+        ax3.hist(inh_means, bins=30, alpha=0.7, color='red', label='Inhibitory', density=True)
+        ax3.set_title('Final Firing Rates Distribution', fontsize=12, fontweight='bold')
+        ax3.set_xlabel('Mean Firing Rate')
+        ax3.set_ylabel('Density')
+        ax3.legend()
+        ax3.grid(True, alpha=0.3)
+    
+    # 4. 优化统计信息 (底部，跨越3列)
+    ax4 = fig.add_subplot(gs[2, :])
+    ax4.axis('off')
+    
+    # 创建统计信息文本
+    stats_text = "Optimization Statistics:\n"
+    if len(loss_history) > 0:
+        stats_text += f"• Total Iterations: {len(loss_history)}\n"
+        stats_text += f"• Initial Loss: {loss_history[0]:.6f}\n"
+        stats_text += f"• Final Loss: {loss_history[-1]:.6f}\n"
+        stats_text += f"• Loss Improvement: {loss_history[0] - loss_history[-1]:.6f}\n"
+        stats_text += f"• Convergence: {'Yes' if abs(loss_history[-1] - loss_history[-10]) < 1e-6 else 'Partial'}\n"
+    
+    if firing_rates_history:
+        stats_text += f"• Firing Rates History Points: {len(firing_rates_history)}\n"
+        stats_text += f"• Segments: {num_segments_exc} (Exc) + {num_segments_inh} (Inh) = {num_segments_exc + num_segments_inh}\n"
+        stats_text += f"• Time Duration: {time_duration_ms} ms\n"
+        stats_text += f"• Input Window: {input_window_size} ms"
+    
+    ax4.text(0.1, 0.5, stats_text, transform=ax4.transAxes, fontsize=11,
+            verticalalignment='center', bbox=dict(boxstyle='round', facecolor='lightgray', alpha=0.8))
+    
+    # 设置总标题
+    fig.suptitle(title, fontsize=16, fontweight='bold')
+    
+    # 保存或显示
+    if save_path:
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        print(f"优化总结图已保存到: {save_path}")
+    
+    if show_plot:
+        plt.show()
+    
+    plt.close()
+    
+    return save_path
+
+def create_optimization_report(loss_history, firing_rates_history, 
+                              optimized_firing_rates, fixed_exc_indices,
+                              num_segments_exc, num_segments_inh, 
+                              time_duration_ms, input_window_size,
+                              save_dir, report_name="optimization_report"):
+    """
+    创建完整的优化报告，包含所有可视化内容
+    
+    Args:
+        loss_history: 损失历史
+        firing_rates_history: firing rates历史
+        optimized_firing_rates: 优化后的firing rates
+        fixed_exc_indices: 固定的excitatory indices
+        num_segments_exc: 兴奋性segments数量
+        num_segments_inh: 抑制性segments数量
+        time_duration_ms: 时间长度
+        input_window_size: 输入窗口大小
+        save_dir: 保存目录
+        report_name: 报告名称
+    """
+    os.makedirs(save_dir, exist_ok=True)
+    
+    print(f"\n开始生成优化报告: {report_name}")
+    
+    # 1. 损失历史
+    plot_loss_history(loss_history, save_path=os.path.join(save_dir, f'{report_name}_loss_history.png'))
+    
+    # 2. Firing rates演化
+    if firing_rates_history:
+        plot_firing_rates_evolution(
+            firing_rates_history, num_segments_exc, num_segments_inh,
+            time_duration_ms, input_window_size,
+            save_path=os.path.join(save_dir, f'{report_name}_firing_rates_evolution.png')
+        )
+    
+    # 3. 优化总结
+    plot_optimization_summary(
+        loss_history, firing_rates_history, num_segments_exc, num_segments_inh,
+        time_duration_ms, input_window_size,
+        save_path=os.path.join(save_dir, f'{report_name}_summary.png')
+    )
+    
+    # 4. 优化后的firing rates可视化
+    visualize_optimized_firing_rates(
+        optimized_firing_rates, fixed_exc_indices, num_segments_exc,
+        save_dir, title_prefix=f"{report_name.title()} - Optimized"
+    )
+    
+    print(f"优化报告已生成，保存在: {save_dir}")
+    
+    return save_dir
+
+def visualize_optimized_firing_rates(optimized_firing_rates, fixed_exc_indices, 
+                                   num_exc_segments=639, save_dir=None, 
+                                   title_prefix="Optimized Firing Rates"):
+    """
+    可视化优化后的firing rates
+    
+    Args:
+        optimized_firing_rates: 优化后的firing rates
+        fixed_exc_indices: 固定的excitatory indices
+        num_exc_segments: 兴奋性segments数量
+        save_dir: 保存目录
+        title_prefix: 标题前缀
+    """
+    if save_dir is None:
+        print("警告: 未指定保存目录，跳过可视化")
+        return
+    
+    os.makedirs(save_dir, exist_ok=True)
+    
+    # 取第一个batch进行可视化
+    optimized_sample = optimized_firing_rates[0]  # (num_segments, time_duration)
+    
+    print("\n生成优化后的firing rates可视化...")
+    
+    # 指定要可视化的segments：优先显示fixed_exc_indices，如果没有则使用默认采样
+    specified_segments = None
+    if fixed_exc_indices is not None and len(fixed_exc_indices) > 0:
+        # 扩展fixed_exc_indices，包含周围的一些segments以便更好地观察
+        extended_indices = []
+        for idx in fixed_exc_indices:
+            # 为每个fixed index添加前后各2个segments
+            start_idx = max(0, idx - 2)
+            end_idx = min(optimized_sample.shape[0], idx + 3)
+            extended_indices.extend(range(start_idx, end_idx))
+        
+        # 去重并排序
+        extended_indices = sorted(list(set(extended_indices)))
+        specified_segments = extended_indices
+        
+        print(f"指定可视化segments: {specified_segments}")
+        print(f"包含fixed_exc_indices: {fixed_exc_indices}")
+    
+    # Raster plot
+    raster_save_path = os.path.join(save_dir, 'optimized_firing_rates_raster.png')
+    visualize_firing_rates_trace(
+        firing_rates=optimized_sample,
+        num_exc_segments=num_exc_segments,
+        save_path=raster_save_path,
+        title=f"{title_prefix} - Raster Plot",
+        max_segments_to_show=10,
+        specified_segments=specified_segments
+    )
+    
+    # Heatmap
+    heatmap_save_path = os.path.join(save_dir, 'optimized_firing_rates_heatmap.png')
+    visualize_firing_rates_heatmap(
+        firing_rates=optimized_sample,
+        num_exc_segments=num_exc_segments,
+        save_path=heatmap_save_path,
+        title=f"{title_prefix} - Heatmap",
+        max_segments_to_show=10,
+        specified_segments=specified_segments
+    )
+    
+    print("优化后的firing rates可视化已保存")
+    
+    return {
+        'raster_path': raster_save_path,
+        'heatmap_path': heatmap_save_path
+    }
+
 if __name__ == "__main__":
     # 运行演示
     demo_firing_rates = demo_visualization()
@@ -521,10 +886,10 @@ if __name__ == "__main__":
     print()
     print("# 假设你的firing_rates是 (1279, 310) 的numpy数组")
     print("# 前639个segments是兴奋性，后640个是抑制性")
-    print("from visualize_firing_rates import visualize_firing_rates_raster, visualize_firing_rates_heatmap")
+    print("from utils.visualization_utils import visualize_firing_rates_trace, visualize_firing_rates_heatmap")
     print()
     print("# 类似raster plot的可视化")
-    print("visualize_firing_rates_raster(")
+    print("visualize_firing_rates_trace(")
     print("    firing_rates=your_firing_rates,")
     print("    num_exc_segments=639,")
     print("    save_path='your_output_path.png',")

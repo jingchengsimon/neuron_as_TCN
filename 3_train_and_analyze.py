@@ -1,17 +1,17 @@
 import numpy as np
-import pandas as pd
 import glob
 import time
-import sys
 import os
 import pickle
 from datetime import datetime  
 from itertools import product
-from fit_CNN import create_temporaly_convolutional_model, SimulationDataGenerator
 # from fit_CNN_pytorch import train_and_save_pytorch
-from model_analysis import load_model_results, print_model_summary, plot_training_curves, plot_model_comparison, analyze_training_stability, plot_auc_analysis
+from utils.fit_CNN import create_temporaly_convolutional_model, SimulationDataGenerator
+from utils.model_analysis import (
+    load_model_results, print_model_summary, 
+    plot_training_curves, plot_model_comparison, analyze_training_stability, plot_auc_analysis
+)
 import tensorflow as tf
-import keras
 from keras.optimizers import Nadam
 from keras.callbacks import LearningRateScheduler
 
@@ -651,7 +651,7 @@ def main():
         
         # 模型和分析目录
         model_dir = f'{base_path}/models/{model_suffix}/depth_{network_depth}_filters_{num_filters_per_layer}_window_{input_window_size}/'
-        analysis_dir = f'./Results/model_analysis_plots/{analysis_suffix}/depth_{network_depth}_filters_{num_filters_per_layer}_window_{input_window_size}/'
+        analysis_dir = f'./results/model_analysis_plots/{analysis_suffix}/depth_{network_depth}_filters_{num_filters_per_layer}_window_{input_window_size}/'
         
         os.makedirs(model_dir, exist_ok=True)
         os.makedirs(analysis_dir, exist_ok=True)

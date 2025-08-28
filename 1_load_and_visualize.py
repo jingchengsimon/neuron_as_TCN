@@ -1,6 +1,6 @@
 import numpy as np
 import os
-from visualize_firing_rates import visualize_firing_rates_raster, visualize_firing_rates_heatmap
+from utils.visualization_utils import visualize_firing_rates_trace, visualize_firing_rates_heatmap
 
 def load_and_visualize_firing_rates(npy_file_path, num_exc_segments=639, save_dir=None):
     """
@@ -82,7 +82,7 @@ def load_and_visualize_firing_rates(npy_file_path, num_exc_segments=639, save_di
     raster_save_path = os.path.join(save_dir, f"{base_name}_raster_plot.png")
     
     try:
-        stats = visualize_firing_rates_raster(
+        stats = visualize_firing_rates_trace(
             firing_rates=firing_rates,
             num_exc_segments=num_exc_segments,
             save_path=raster_save_path,
@@ -217,12 +217,12 @@ def main():
     firing_rates = load_and_visualize_firing_rates(
         npy_file_path=npy_file,
         num_exc_segments=639,  # 前639个是兴奋性
-        save_dir="./firing_rate_visualization/"
+        save_dir="./results/1_firing_rate_visualization/"
     )
     
     if firing_rates is not None:
         print(f"\n成功加载数据，形状: {firing_rates.shape}")
-        print("可视化文件已生成在 ./firing_rate_visualization/ 目录中")
+        print("可视化文件已生成在 ./results/1_firing_rate_visualization/ 目录中")
 
 if __name__ == "__main__":
     main() 

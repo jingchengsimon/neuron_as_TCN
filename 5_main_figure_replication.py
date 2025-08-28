@@ -17,7 +17,7 @@ from sklearn.metrics import mean_squared_error as MSE
 from sklearn.metrics import mean_absolute_error as MAE
 from sklearn.metrics import explained_variance_score
 from sklearn.metrics import roc_curve, auc
-from activity_optimization import find_best_model
+from utils.find_best_model import find_best_model
 
 matplotlib.rcParams['pdf.fonttype'] = 42
 matplotlib.rcParams['svg.fonttype'] = 'none'
@@ -426,7 +426,7 @@ def main(models_dir, data_dir, model_string='NMDA', model_size='large'):
     elif 'fullStrategy' in path_str:
         dataset_identifier = f'original_fullStrategy_fpr{desired_false_positive_rate}'
 
-    output_dir = f"./Results/main_figure_replication/{dataset_identifier}"
+    output_dir = f"./results/main_figure_replication/{dataset_identifier}"
     os.makedirs(output_dir, exist_ok=True)
     
     print('-----------------------------------------------')
