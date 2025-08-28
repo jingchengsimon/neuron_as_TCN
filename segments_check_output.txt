@@ -1,0 +1,326 @@
+==========================================================================================
+检查 .p 文件中的段数量与模拟数量（按fit_CNN读取逻辑）
+==========================================================================================
+找到 .p 文件: 300 个
+
+[1/300] L5PC_sim__Output_spikes_0971__Input_ranges_Exc_[0126,1141]_Inh_[0051,1308]_per100ms__simXsec_128x6_randseed_1110284.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[2/300] L5PC_sim__Output_spikes_0973__Input_ranges_Exc_[0130,1174]_Inh_[0046,1298]_per100ms__simXsec_128x6_randseed_1110257.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[3/300] L5PC_sim__Output_spikes_0977__Input_ranges_Exc_[0111,1139]_Inh_[0046,1264]_per100ms__simXsec_128x6_randseed_500145.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[4/300] L5PC_sim__Output_spikes_0979__Input_ranges_Exc_[0124,1171]_Inh_[0041,1322]_per100ms__simXsec_128x6_randseed_1110243.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[5/300] L5PC_sim__Output_spikes_0980__Input_ranges_Exc_[0114,1183]_Inh_[0036,1310]_per100ms__simXsec_128x6_randseed_1110278.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[6/300] L5PC_sim__Output_spikes_0983__Input_ranges_Exc_[0127,1173]_Inh_[0063,1322]_per100ms__simXsec_128x6_randseed_800146.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[7/300] L5PC_sim__Output_spikes_0984__Input_ranges_Exc_[0122,1192]_Inh_[0041,1319]_per100ms__simXsec_128x6_randseed_300072.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[8/300] L5PC_sim__Output_spikes_0986__Input_ranges_Exc_[0138,1178]_Inh_[0060,1321]_per100ms__simXsec_128x6_randseed_1110131.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[9/300] L5PC_sim__Output_spikes_0989__Input_ranges_Exc_[0129,1163]_Inh_[0060,1311]_per100ms__simXsec_128x6_randseed_1110028.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[10/300] L5PC_sim__Output_spikes_0990__Input_ranges_Exc_[0117,1157]_Inh_[0045,1272]_per100ms__simXsec_128x6_randseed_1110051.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[11/300] L5PC_sim__Output_spikes_0992__Input_ranges_Exc_[0154,1158]_Inh_[0075,1317]_per100ms__simXsec_128x6_randseed_1110020.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[12/300] L5PC_sim__Output_spikes_0994__Input_ranges_Exc_[0142,1175]_Inh_[0049,1341]_per100ms__simXsec_128x6_randseed_1110176.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[13/300] L5PC_sim__Output_spikes_0998__Input_ranges_Exc_[0120,1181]_Inh_[0030,1347]_per100ms__simXsec_128x6_randseed_1110174.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[14/300] L5PC_sim__Output_spikes_1000__Input_ranges_Exc_[0133,1162]_Inh_[0049,1288]_per100ms__simXsec_128x6_randseed_800109.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[15/300] L5PC_sim__Output_spikes_1002__Input_ranges_Exc_[0124,1170]_Inh_[0038,1317]_per100ms__simXsec_128x6_randseed_400099.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[16/300] L5PC_sim__Output_spikes_1005__Input_ranges_Exc_[0131,1181]_Inh_[0043,1323]_per100ms__simXsec_128x6_randseed_1110076.p | sims=128 | total_segments=639 | first_sim(exc=618,inh=157)
+[17/300] L5PC_sim__Output_spikes_1010__Input_ranges_Exc_[0116,1157]_Inh_[0041,1325]_per100ms__simXsec_128x6_randseed_600045.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[18/300] L5PC_sim__Output_spikes_1017__Input_ranges_Exc_[0124,1193]_Inh_[0035,1334]_per100ms__simXsec_128x6_randseed_1110267.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[19/300] L5PC_sim__Output_spikes_1020__Input_ranges_Exc_[0124,1187]_Inh_[0037,1347]_per100ms__simXsec_128x6_randseed_200055.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[20/300] L5PC_sim__Output_spikes_1024__Input_ranges_Exc_[0123,1201]_Inh_[0054,1337]_per100ms__simXsec_128x6_randseed_1110232.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[21/300] L5PC_sim__Output_spikes_1030__Input_ranges_Exc_[0118,1163]_Inh_[0021,1291]_per100ms__simXsec_128x6_randseed_1110163.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[22/300] L5PC_sim__Output_spikes_1036__Input_ranges_Exc_[0130,1169]_Inh_[0062,1320]_per100ms__simXsec_128x6_randseed_1110142.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[23/300] L5PC_sim__Output_spikes_1041__Input_ranges_Exc_[0124,1221]_Inh_[0039,1383]_per100ms__simXsec_128x6_randseed_500186.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[24/300] L5PC_sim__Output_spikes_1053__Input_ranges_Exc_[0136,1162]_Inh_[0058,1313]_per100ms__simXsec_128x6_randseed_1110233.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[25/300] L5PC_sim__Output_spikes_1062__Input_ranges_Exc_[0117,1163]_Inh_[0041,1308]_per100ms__simXsec_128x6_randseed_800113.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[26/300] L5PC_sim__Output_spikes_1063__Input_ranges_Exc_[0134,1171]_Inh_[0031,1335]_per100ms__simXsec_128x6_randseed_700179.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[27/300] L5PC_sim__Output_spikes_1080__Input_ranges_Exc_[0137,1196]_Inh_[0052,1342]_per100ms__simXsec_128x6_randseed_200044.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[28/300] L5PC_sim__Output_spikes_1084__Input_ranges_Exc_[0127,1169]_Inh_[0054,1324]_per100ms__simXsec_128x6_randseed_400096.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[29/300] L5PC_sim__Output_spikes_1102__Input_ranges_Exc_[0129,1185]_Inh_[0035,1331]_per100ms__simXsec_128x6_randseed_1110137.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[30/300] L5PC_sim__Output_spikes_1142__Input_ranges_Exc_[0162,1177]_Inh_[0081,1288]_per100ms__simXsec_128x6_randseed_1110047.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[31/300] L5PC_sim__Output_spikes_0722__Input_ranges_Exc_[0124,1128]_Inh_[0055,1287]_per100ms__simXsec_128x6_randseed_600041.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[32/300] L5PC_sim__Output_spikes_0729__Input_ranges_Exc_[0119,1138]_Inh_[0041,1296]_per100ms__simXsec_128x6_randseed_800102.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[33/300] L5PC_sim__Output_spikes_0732__Input_ranges_Exc_[0118,1157]_Inh_[0035,1293]_per100ms__simXsec_128x6_randseed_500147.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[34/300] L5PC_sim__Output_spikes_0740__Input_ranges_Exc_[0134,1145]_Inh_[0060,1285]_per100ms__simXsec_128x6_randseed_500201.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[35/300] L5PC_sim__Output_spikes_0741__Input_ranges_Exc_[0146,1184]_Inh_[0060,1352]_per100ms__simXsec_128x6_randseed_400102.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[36/300] L5PC_sim__Output_spikes_0748__Input_ranges_Exc_[0112,1126]_Inh_[0036,1288]_per100ms__simXsec_128x6_randseed_800130.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[37/300] L5PC_sim__Output_spikes_0769__Input_ranges_Exc_[0123,1149]_Inh_[0039,1301]_per100ms__simXsec_128x6_randseed_1110116.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[38/300] L5PC_sim__Output_spikes_0771__Input_ranges_Exc_[0121,1162]_Inh_[0047,1308]_per100ms__simXsec_128x6_randseed_1110273.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[39/300] L5PC_sim__Output_spikes_0774__Input_ranges_Exc_[0134,1156]_Inh_[0061,1303]_per100ms__simXsec_128x6_randseed_700135.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[40/300] L5PC_sim__Output_spikes_0775__Input_ranges_Exc_[0118,1098]_Inh_[0051,1220]_per100ms__simXsec_128x6_randseed_1110308.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[41/300] L5PC_sim__Output_spikes_0780__Input_ranges_Exc_[0132,1175]_Inh_[0047,1337]_per100ms__simXsec_128x6_randseed_400109.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[42/300] L5PC_sim__Output_spikes_0785__Input_ranges_Exc_[0138,1185]_Inh_[0061,1313]_per100ms__simXsec_128x6_randseed_1110154.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[43/300] L5PC_sim__Output_spikes_0791__Input_ranges_Exc_[0128,1138]_Inh_[0043,1256]_per100ms__simXsec_128x6_randseed_500188.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=578)
+[44/300] L5PC_sim__Output_spikes_0792__Input_ranges_Exc_[0116,1170]_Inh_[0044,1298]_per100ms__simXsec_128x6_randseed_400103.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[45/300] L5PC_sim__Output_spikes_0795__Input_ranges_Exc_[0127,1142]_Inh_[0072,1290]_per100ms__simXsec_128x6_randseed_1110187.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[46/300] L5PC_sim__Output_spikes_0796__Input_ranges_Exc_[0141,1153]_Inh_[0065,1313]_per100ms__simXsec_128x6_randseed_1110201.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[47/300] L5PC_sim__Output_spikes_0797__Input_ranges_Exc_[0121,1142]_Inh_[0045,1302]_per100ms__simXsec_128x6_randseed_1110181.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[48/300] L5PC_sim__Output_spikes_0797__Input_ranges_Exc_[0129,1169]_Inh_[0051,1311]_per100ms__simXsec_128x6_randseed_100023.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[49/300] L5PC_sim__Output_spikes_0801__Input_ranges_Exc_[0124,1144]_Inh_[0047,1276]_per100ms__simXsec_128x6_randseed_1110115.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[50/300] L5PC_sim__Output_spikes_0802__Input_ranges_Exc_[0118,1154]_Inh_[0043,1302]_per100ms__simXsec_128x6_randseed_200056.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[51/300] L5PC_sim__Output_spikes_0802__Input_ranges_Exc_[0129,1196]_Inh_[0067,1356]_per100ms__simXsec_128x6_randseed_400084.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[52/300] L5PC_sim__Output_spikes_0802__Input_ranges_Exc_[0140,1142]_Inh_[0028,1304]_per100ms__simXsec_128x6_randseed_500162.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[53/300] L5PC_sim__Output_spikes_0803__Input_ranges_Exc_[0125,1161]_Inh_[0039,1296]_per100ms__simXsec_128x6_randseed_1110255.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[54/300] L5PC_sim__Output_spikes_0803__Input_ranges_Exc_[0129,1174]_Inh_[0038,1340]_per100ms__simXsec_128x6_randseed_1110178.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[55/300] L5PC_sim__Output_spikes_0805__Input_ranges_Exc_[0131,1172]_Inh_[0058,1308]_per100ms__simXsec_128x6_randseed_500204.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[56/300] L5PC_sim__Output_spikes_0807__Input_ranges_Exc_[0125,1197]_Inh_[0047,1375]_per100ms__simXsec_128x6_randseed_400116.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[57/300] L5PC_sim__Output_spikes_0808__Input_ranges_Exc_[0115,1178]_Inh_[0047,1334]_per100ms__simXsec_128x6_randseed_800115.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[58/300] L5PC_sim__Output_spikes_0809__Input_ranges_Exc_[0124,1125]_Inh_[0054,1278]_per100ms__simXsec_128x6_randseed_1110212.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[59/300] L5PC_sim__Output_spikes_0809__Input_ranges_Exc_[0150,1181]_Inh_[0063,1342]_per100ms__simXsec_128x6_randseed_400108.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[60/300] L5PC_sim__Output_spikes_0812__Input_ranges_Exc_[0128,1184]_Inh_[0045,1337]_per100ms__simXsec_128x6_randseed_500167.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[61/300] L5PC_sim__Output_spikes_0814__Input_ranges_Exc_[0141,1158]_Inh_[0053,1312]_per100ms__simXsec_128x6_randseed_1110042.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[62/300] L5PC_sim__Output_spikes_0815__Input_ranges_Exc_[0131,1181]_Inh_[0045,1348]_per100ms__simXsec_128x6_randseed_1110299.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[63/300] L5PC_sim__Output_spikes_0816__Input_ranges_Exc_[0113,1137]_Inh_[0046,1281]_per100ms__simXsec_128x6_randseed_300063.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[64/300] L5PC_sim__Output_spikes_0818__Input_ranges_Exc_[0139,1166]_Inh_[0064,1319]_per100ms__simXsec_128x6_randseed_500153.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[65/300] L5PC_sim__Output_spikes_0819__Input_ranges_Exc_[0120,1155]_Inh_[0042,1286]_per100ms__simXsec_128x6_randseed_800132.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[66/300] L5PC_sim__Output_spikes_0819__Input_ranges_Exc_[0120,1169]_Inh_[0041,1307]_per100ms__simXsec_128x6_randseed_1110239.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[67/300] L5PC_sim__Output_spikes_0819__Input_ranges_Exc_[0124,1148]_Inh_[0046,1290]_per100ms__simXsec_128x6_randseed_400119.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[68/300] L5PC_sim__Output_spikes_0819__Input_ranges_Exc_[0133,1196]_Inh_[0053,1353]_per100ms__simXsec_128x6_randseed_500198.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[69/300] L5PC_sim__Output_spikes_0819__Input_ranges_Exc_[0161,1192]_Inh_[0078,1355]_per100ms__simXsec_128x6_randseed_500205.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=637)
+[70/300] L5PC_sim__Output_spikes_0821__Input_ranges_Exc_[0106,1184]_Inh_[0043,1335]_per100ms__simXsec_128x6_randseed_700160.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[71/300] L5PC_sim__Output_spikes_0821__Input_ranges_Exc_[0123,1164]_Inh_[0048,1313]_per100ms__simXsec_128x6_randseed_700142.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[72/300] L5PC_sim__Output_spikes_0821__Input_ranges_Exc_[0129,1107]_Inh_[0041,1262]_per100ms__simXsec_128x6_randseed_1110300.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[73/300] L5PC_sim__Output_spikes_0822__Input_ranges_Exc_[0122,1146]_Inh_[0047,1298]_per100ms__simXsec_128x6_randseed_1110265.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[74/300] L5PC_sim__Output_spikes_0822__Input_ranges_Exc_[0127,1153]_Inh_[0044,1295]_per100ms__simXsec_128x6_randseed_1110094.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[75/300] L5PC_sim__Output_spikes_0824__Input_ranges_Exc_[0120,1103]_Inh_[0040,1251]_per100ms__simXsec_128x6_randseed_1110272.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[76/300] L5PC_sim__Output_spikes_0825__Input_ranges_Exc_[0120,1136]_Inh_[0048,1275]_per100ms__simXsec_128x6_randseed_300090.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[77/300] L5PC_sim__Output_spikes_0826__Input_ranges_Exc_[0118,1141]_Inh_[0042,1285]_per100ms__simXsec_128x6_randseed_300067.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[78/300] L5PC_sim__Output_spikes_0826__Input_ranges_Exc_[0122,1174]_Inh_[0042,1330]_per100ms__simXsec_128x6_randseed_800133.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[79/300] L5PC_sim__Output_spikes_0826__Input_ranges_Exc_[0124,1182]_Inh_[0060,1314]_per100ms__simXsec_128x6_randseed_1110040.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[80/300] L5PC_sim__Output_spikes_0826__Input_ranges_Exc_[0136,1167]_Inh_[0070,1326]_per100ms__simXsec_128x6_randseed_1110060.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[81/300] L5PC_sim__Output_spikes_0827__Input_ranges_Exc_[0121,1156]_Inh_[0043,1305]_per100ms__simXsec_128x6_randseed_1110072.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[82/300] L5PC_sim__Output_spikes_0827__Input_ranges_Exc_[0143,1185]_Inh_[0064,1324]_per100ms__simXsec_128x6_randseed_1110235.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[83/300] L5PC_sim__Output_spikes_0828__Input_ranges_Exc_[0117,1182]_Inh_[0042,1326]_per100ms__simXsec_128x6_randseed_500170.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[84/300] L5PC_sim__Output_spikes_0828__Input_ranges_Exc_[0127,1178]_Inh_[0053,1319]_per100ms__simXsec_128x6_randseed_800131.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[85/300] L5PC_sim__Output_spikes_0828__Input_ranges_Exc_[0132,1148]_Inh_[0049,1285]_per100ms__simXsec_128x6_randseed_1110261.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[86/300] L5PC_sim__Output_spikes_0829__Input_ranges_Exc_[0125,1161]_Inh_[0041,1333]_per100ms__simXsec_128x6_randseed_1110075.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[87/300] L5PC_sim__Output_spikes_0829__Input_ranges_Exc_[0137,1142]_Inh_[0055,1290]_per100ms__simXsec_128x6_randseed_1110009.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=634)
+[88/300] L5PC_sim__Output_spikes_0829__Input_ranges_Exc_[0146,1167]_Inh_[0070,1288]_per100ms__simXsec_128x6_randseed_1110133.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[89/300] L5PC_sim__Output_spikes_0831__Input_ranges_Exc_[0117,1125]_Inh_[0038,1246]_per100ms__simXsec_128x6_randseed_1110083.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[90/300] L5PC_sim__Output_spikes_0831__Input_ranges_Exc_[0121,1140]_Inh_[0048,1288]_per100ms__simXsec_128x6_randseed_1110050.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[91/300] L5PC_sim__Output_spikes_0831__Input_ranges_Exc_[0123,1148]_Inh_[0054,1315]_per100ms__simXsec_128x6_randseed_1110082.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[92/300] L5PC_sim__Output_spikes_0831__Input_ranges_Exc_[0137,1158]_Inh_[0043,1296]_per100ms__simXsec_128x6_randseed_1110092.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[93/300] L5PC_sim__Output_spikes_0832__Input_ranges_Exc_[0123,1127]_Inh_[0036,1262]_per100ms__simXsec_128x6_randseed_1110101.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[94/300] L5PC_sim__Output_spikes_0832__Input_ranges_Exc_[0137,1156]_Inh_[0059,1294]_per100ms__simXsec_128x6_randseed_400110.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[95/300] L5PC_sim__Output_spikes_0833__Input_ranges_Exc_[0110,1137]_Inh_[0027,1277]_per100ms__simXsec_128x6_randseed_200041.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[96/300] L5PC_sim__Output_spikes_0833__Input_ranges_Exc_[0120,1152]_Inh_[0049,1267]_per100ms__simXsec_128x6_randseed_1110005.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[97/300] L5PC_sim__Output_spikes_0833__Input_ranges_Exc_[0136,1231]_Inh_[0050,1379]_per100ms__simXsec_128x6_randseed_100027.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[98/300] L5PC_sim__Output_spikes_0834__Input_ranges_Exc_[0123,1175]_Inh_[0043,1321]_per100ms__simXsec_128x6_randseed_700130.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[99/300] L5PC_sim__Output_spikes_0835__Input_ranges_Exc_[0112,1129]_Inh_[0040,1277]_per100ms__simXsec_128x6_randseed_700152.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=621)
+[100/300] L5PC_sim__Output_spikes_0835__Input_ranges_Exc_[0117,1155]_Inh_[0038,1296]_per100ms__simXsec_128x6_randseed_200047.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[101/300] L5PC_sim__Output_spikes_0835__Input_ranges_Exc_[0132,1156]_Inh_[0058,1293]_per100ms__simXsec_128x6_randseed_1110014.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[102/300] L5PC_sim__Output_spikes_0835__Input_ranges_Exc_[0142,1171]_Inh_[0064,1331]_per100ms__simXsec_128x6_randseed_700172.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[103/300] L5PC_sim__Output_spikes_0836__Input_ranges_Exc_[0134,1146]_Inh_[0037,1300]_per100ms__simXsec_128x6_randseed_800141.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[104/300] L5PC_sim__Output_spikes_0837__Input_ranges_Exc_[0107,1185]_Inh_[0032,1326]_per100ms__simXsec_128x6_randseed_700151.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[105/300] L5PC_sim__Output_spikes_0837__Input_ranges_Exc_[0128,1152]_Inh_[0046,1286]_per100ms__simXsec_128x6_randseed_500159.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[106/300] L5PC_sim__Output_spikes_0837__Input_ranges_Exc_[0134,1166]_Inh_[0040,1300]_per100ms__simXsec_128x6_randseed_200054.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[107/300] L5PC_sim__Output_spikes_0838__Input_ranges_Exc_[0118,1171]_Inh_[0037,1287]_per100ms__simXsec_128x6_randseed_700167.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[108/300] L5PC_sim__Output_spikes_0838__Input_ranges_Exc_[0129,1142]_Inh_[0046,1292]_per100ms__simXsec_128x6_randseed_1110063.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[109/300] L5PC_sim__Output_spikes_0838__Input_ranges_Exc_[0150,1168]_Inh_[0071,1321]_per100ms__simXsec_128x6_randseed_800126.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[110/300] L5PC_sim__Output_spikes_0839__Input_ranges_Exc_[0112,1184]_Inh_[0039,1315]_per100ms__simXsec_128x6_randseed_1110056.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[111/300] L5PC_sim__Output_spikes_0839__Input_ranges_Exc_[0132,1161]_Inh_[0049,1305]_per100ms__simXsec_128x6_randseed_400082.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[112/300] L5PC_sim__Output_spikes_0839__Input_ranges_Exc_[0150,1181]_Inh_[0057,1346]_per100ms__simXsec_128x6_randseed_1110219.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[113/300] L5PC_sim__Output_spikes_0840__Input_ranges_Exc_[0110,1153]_Inh_[0045,1317]_per100ms__simXsec_128x6_randseed_1110052.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[114/300] L5PC_sim__Output_spikes_0840__Input_ranges_Exc_[0117,1160]_Inh_[0047,1259]_per100ms__simXsec_128x6_randseed_500165.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[115/300] L5PC_sim__Output_spikes_0840__Input_ranges_Exc_[0118,1140]_Inh_[0021,1263]_per100ms__simXsec_128x6_randseed_800136.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[116/300] L5PC_sim__Output_spikes_0840__Input_ranges_Exc_[0118,1156]_Inh_[0044,1306]_per100ms__simXsec_128x6_randseed_1110151.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[117/300] L5PC_sim__Output_spikes_0840__Input_ranges_Exc_[0132,1153]_Inh_[0056,1311]_per100ms__simXsec_128x6_randseed_700175.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[118/300] L5PC_sim__Output_spikes_0840__Input_ranges_Exc_[0142,1146]_Inh_[0079,1287]_per100ms__simXsec_128x6_randseed_500185.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[119/300] L5PC_sim__Output_spikes_0841__Input_ranges_Exc_[0098,1146]_Inh_[0038,1304]_per100ms__simXsec_128x6_randseed_500195.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[120/300] L5PC_sim__Output_spikes_0841__Input_ranges_Exc_[0124,1176]_Inh_[0059,1326]_per100ms__simXsec_128x6_randseed_700131.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[121/300] L5PC_sim__Output_spikes_0841__Input_ranges_Exc_[0138,1190]_Inh_[0069,1350]_per100ms__simXsec_128x6_randseed_400104.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[122/300] L5PC_sim__Output_spikes_0842__Input_ranges_Exc_[0126,1145]_Inh_[0041,1289]_per100ms__simXsec_128x6_randseed_700157.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[123/300] L5PC_sim__Output_spikes_0842__Input_ranges_Exc_[0126,1164]_Inh_[0051,1322]_per100ms__simXsec_128x6_randseed_1110234.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[124/300] L5PC_sim__Output_spikes_0842__Input_ranges_Exc_[0129,1153]_Inh_[0044,1295]_per100ms__simXsec_128x6_randseed_800140.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[125/300] L5PC_sim__Output_spikes_0843__Input_ranges_Exc_[0132,1178]_Inh_[0052,1341]_per100ms__simXsec_128x6_randseed_1110062.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[126/300] L5PC_sim__Output_spikes_0843__Input_ranges_Exc_[0149,1211]_Inh_[0075,1365]_per100ms__simXsec_128x6_randseed_800112.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[127/300] L5PC_sim__Output_spikes_0844__Input_ranges_Exc_[0113,1153]_Inh_[0025,1300]_per100ms__simXsec_128x6_randseed_1110043.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[128/300] L5PC_sim__Output_spikes_0844__Input_ranges_Exc_[0129,1129]_Inh_[0049,1270]_per100ms__simXsec_128x6_randseed_1110247.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[129/300] L5PC_sim__Output_spikes_0845__Input_ranges_Exc_[0123,1123]_Inh_[0043,1246]_per100ms__simXsec_128x6_randseed_1110098.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[130/300] L5PC_sim__Output_spikes_0846__Input_ranges_Exc_[0117,1165]_Inh_[0032,1321]_per100ms__simXsec_128x6_randseed_800145.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[131/300] L5PC_sim__Output_spikes_0847__Input_ranges_Exc_[0113,1126]_Inh_[0040,1244]_per100ms__simXsec_128x6_randseed_1110173.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[132/300] L5PC_sim__Output_spikes_0847__Input_ranges_Exc_[0122,1199]_Inh_[0056,1356]_per100ms__simXsec_128x6_randseed_1110126.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[133/300] L5PC_sim__Output_spikes_0847__Input_ranges_Exc_[0124,1166]_Inh_[0055,1313]_per100ms__simXsec_128x6_randseed_300074.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[134/300] L5PC_sim__Output_spikes_0848__Input_ranges_Exc_[0108,1151]_Inh_[0034,1276]_per100ms__simXsec_128x6_randseed_1110160.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[135/300] L5PC_sim__Output_spikes_0848__Input_ranges_Exc_[0112,1169]_Inh_[0034,1315]_per100ms__simXsec_128x6_randseed_300071.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[136/300] L5PC_sim__Output_spikes_0848__Input_ranges_Exc_[0119,1175]_Inh_[0047,1329]_per100ms__simXsec_128x6_randseed_100025.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[137/300] L5PC_sim__Output_spikes_0848__Input_ranges_Exc_[0134,1158]_Inh_[0043,1327]_per100ms__simXsec_128x6_randseed_1110271.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[138/300] L5PC_sim__Output_spikes_0849__Input_ranges_Exc_[0115,1113]_Inh_[0043,1254]_per100ms__simXsec_128x6_randseed_1110292.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[139/300] L5PC_sim__Output_spikes_0850__Input_ranges_Exc_[0108,1154]_Inh_[0022,1281]_per100ms__simXsec_128x6_randseed_700132.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[140/300] L5PC_sim__Output_spikes_0851__Input_ranges_Exc_[0129,1184]_Inh_[0056,1304]_per100ms__simXsec_128x6_randseed_1110165.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[141/300] L5PC_sim__Output_spikes_0852__Input_ranges_Exc_[0135,1143]_Inh_[0047,1285]_per100ms__simXsec_128x6_randseed_1110127.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=304)
+[142/300] L5PC_sim__Output_spikes_0852__Input_ranges_Exc_[0137,1205]_Inh_[0063,1372]_per100ms__simXsec_128x6_randseed_100030.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[143/300] L5PC_sim__Output_spikes_0852__Input_ranges_Exc_[0145,1170]_Inh_[0056,1320]_per100ms__simXsec_128x6_randseed_600047.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[144/300] L5PC_sim__Output_spikes_0853__Input_ranges_Exc_[0122,1209]_Inh_[0041,1377]_per100ms__simXsec_128x6_randseed_600055.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[145/300] L5PC_sim__Output_spikes_0853__Input_ranges_Exc_[0137,1161]_Inh_[0059,1329]_per100ms__simXsec_128x6_randseed_1110012.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[146/300] L5PC_sim__Output_spikes_0853__Input_ranges_Exc_[0147,1188]_Inh_[0055,1362]_per100ms__simXsec_128x6_randseed_1110197.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[147/300] L5PC_sim__Output_spikes_0854__Input_ranges_Exc_[0118,1177]_Inh_[0044,1315]_per100ms__simXsec_128x6_randseed_600048.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[148/300] L5PC_sim__Output_spikes_0854__Input_ranges_Exc_[0120,1156]_Inh_[0050,1324]_per100ms__simXsec_128x6_randseed_1110263.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[149/300] L5PC_sim__Output_spikes_0855__Input_ranges_Exc_[0106,1140]_Inh_[0023,1293]_per100ms__simXsec_128x6_randseed_400120.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[150/300] L5PC_sim__Output_spikes_0855__Input_ranges_Exc_[0115,1185]_Inh_[0042,1349]_per100ms__simXsec_128x6_randseed_1110180.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[151/300] L5PC_sim__Output_spikes_0857__Input_ranges_Exc_[0141,1149]_Inh_[0065,1277]_per100ms__simXsec_128x6_randseed_1110250.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[152/300] L5PC_sim__Output_spikes_0858__Input_ranges_Exc_[0117,1158]_Inh_[0035,1314]_per100ms__simXsec_128x6_randseed_500176.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[153/300] L5PC_sim__Output_spikes_0858__Input_ranges_Exc_[0120,1158]_Inh_[0041,1296]_per100ms__simXsec_128x6_randseed_1110252.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[154/300] L5PC_sim__Output_spikes_0858__Input_ranges_Exc_[0127,1170]_Inh_[0042,1306]_per100ms__simXsec_128x6_randseed_800117.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[155/300] L5PC_sim__Output_spikes_0858__Input_ranges_Exc_[0129,1144]_Inh_[0049,1316]_per100ms__simXsec_128x6_randseed_800121.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[156/300] L5PC_sim__Output_spikes_0858__Input_ranges_Exc_[0129,1170]_Inh_[0054,1320]_per100ms__simXsec_128x6_randseed_1110204.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[157/300] L5PC_sim__Output_spikes_0858__Input_ranges_Exc_[0145,1185]_Inh_[0060,1299]_per100ms__simXsec_128x6_randseed_700161.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[158/300] L5PC_sim__Output_spikes_0859__Input_ranges_Exc_[0121,1161]_Inh_[0043,1304]_per100ms__simXsec_128x6_randseed_1110258.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[159/300] L5PC_sim__Output_spikes_0859__Input_ranges_Exc_[0122,1134]_Inh_[0031,1251]_per100ms__simXsec_128x6_randseed_1110186.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[160/300] L5PC_sim__Output_spikes_0859__Input_ranges_Exc_[0133,1158]_Inh_[0044,1312]_per100ms__simXsec_128x6_randseed_400094.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[161/300] L5PC_sim__Output_spikes_0859__Input_ranges_Exc_[0134,1180]_Inh_[0052,1338]_per100ms__simXsec_128x6_randseed_1110070.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[162/300] L5PC_sim__Output_spikes_0859__Input_ranges_Exc_[0137,1179]_Inh_[0061,1323]_per100ms__simXsec_128x6_randseed_1110155.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[163/300] L5PC_sim__Output_spikes_0860__Input_ranges_Exc_[0120,1174]_Inh_[0030,1319]_per100ms__simXsec_128x6_randseed_1110103.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[164/300] L5PC_sim__Output_spikes_0861__Input_ranges_Exc_[0120,1147]_Inh_[0031,1314]_per100ms__simXsec_128x6_randseed_200049.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[165/300] L5PC_sim__Output_spikes_0861__Input_ranges_Exc_[0138,1150]_Inh_[0064,1303]_per100ms__simXsec_128x6_randseed_800101.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=102)
+[166/300] L5PC_sim__Output_spikes_0861__Input_ranges_Exc_[0150,1165]_Inh_[0072,1336]_per100ms__simXsec_128x6_randseed_1110135.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[167/300] L5PC_sim__Output_spikes_0862__Input_ranges_Exc_[0110,1160]_Inh_[0030,1281]_per100ms__simXsec_128x6_randseed_1110026.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[168/300] L5PC_sim__Output_spikes_0862__Input_ranges_Exc_[0118,1146]_Inh_[0044,1301]_per100ms__simXsec_128x6_randseed_500164.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[169/300] L5PC_sim__Output_spikes_0862__Input_ranges_Exc_[0122,1151]_Inh_[0028,1285]_per100ms__simXsec_128x6_randseed_1110307.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[170/300] L5PC_sim__Output_spikes_0862__Input_ranges_Exc_[0125,1154]_Inh_[0027,1269]_per100ms__simXsec_128x6_randseed_1110280.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[171/300] L5PC_sim__Output_spikes_0862__Input_ranges_Exc_[0130,1148]_Inh_[0049,1322]_per100ms__simXsec_128x6_randseed_1110253.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[172/300] L5PC_sim__Output_spikes_0863__Input_ranges_Exc_[0139,1167]_Inh_[0066,1342]_per100ms__simXsec_128x6_randseed_300083.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[173/300] L5PC_sim__Output_spikes_0863__Input_ranges_Exc_[0148,1174]_Inh_[0070,1296]_per100ms__simXsec_128x6_randseed_800110.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[174/300] L5PC_sim__Output_spikes_0864__Input_ranges_Exc_[0137,1171]_Inh_[0055,1351]_per100ms__simXsec_128x6_randseed_1110121.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[175/300] L5PC_sim__Output_spikes_0865__Input_ranges_Exc_[0117,1139]_Inh_[0044,1287]_per100ms__simXsec_128x6_randseed_300087.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[176/300] L5PC_sim__Output_spikes_0865__Input_ranges_Exc_[0129,1157]_Inh_[0041,1303]_per100ms__simXsec_128x6_randseed_100021.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[177/300] L5PC_sim__Output_spikes_0865__Input_ranges_Exc_[0134,1219]_Inh_[0045,1376]_per100ms__simXsec_128x6_randseed_500141.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[178/300] L5PC_sim__Output_spikes_0865__Input_ranges_Exc_[0148,1142]_Inh_[0055,1281]_per100ms__simXsec_128x6_randseed_1110164.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[179/300] L5PC_sim__Output_spikes_0865__Input_ranges_Exc_[0150,1200]_Inh_[0048,1361]_per100ms__simXsec_128x6_randseed_1110162.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[180/300] L5PC_sim__Output_spikes_0866__Input_ranges_Exc_[0132,1163]_Inh_[0051,1301]_per100ms__simXsec_128x6_randseed_500150.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[181/300] L5PC_sim__Output_spikes_0867__Input_ranges_Exc_[0120,1148]_Inh_[0037,1299]_per100ms__simXsec_128x6_randseed_800122.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[182/300] L5PC_sim__Output_spikes_0867__Input_ranges_Exc_[0133,1159]_Inh_[0051,1282]_per100ms__simXsec_128x6_randseed_500181.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[183/300] L5PC_sim__Output_spikes_0868__Input_ranges_Exc_[0120,1144]_Inh_[0042,1300]_per100ms__simXsec_128x6_randseed_1110011.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[184/300] L5PC_sim__Output_spikes_0868__Input_ranges_Exc_[0132,1184]_Inh_[0053,1347]_per100ms__simXsec_128x6_randseed_1110113.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[185/300] L5PC_sim__Output_spikes_0869__Input_ranges_Exc_[0109,1151]_Inh_[0035,1299]_per100ms__simXsec_128x6_randseed_800116.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[186/300] L5PC_sim__Output_spikes_0869__Input_ranges_Exc_[0125,1155]_Inh_[0053,1320]_per100ms__simXsec_128x6_randseed_1110266.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[187/300] L5PC_sim__Output_spikes_0870__Input_ranges_Exc_[0110,1156]_Inh_[0028,1311]_per100ms__simXsec_128x6_randseed_1110259.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[188/300] L5PC_sim__Output_spikes_0870__Input_ranges_Exc_[0122,1198]_Inh_[0048,1343]_per100ms__simXsec_128x6_randseed_500154.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[189/300] L5PC_sim__Output_spikes_0870__Input_ranges_Exc_[0124,1209]_Inh_[0034,1362]_per100ms__simXsec_128x6_randseed_1110225.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[190/300] L5PC_sim__Output_spikes_0870__Input_ranges_Exc_[0128,1161]_Inh_[0047,1323]_per100ms__simXsec_128x6_randseed_400117.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[191/300] L5PC_sim__Output_spikes_0871__Input_ranges_Exc_[0132,1161]_Inh_[0047,1330]_per100ms__simXsec_128x6_randseed_700155.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[192/300] L5PC_sim__Output_spikes_0872__Input_ranges_Exc_[0122,1160]_Inh_[0038,1304]_per100ms__simXsec_128x6_randseed_700136.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[193/300] L5PC_sim__Output_spikes_0872__Input_ranges_Exc_[0131,1163]_Inh_[0042,1320]_per100ms__simXsec_128x6_randseed_1110309.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[194/300] L5PC_sim__Output_spikes_0872__Input_ranges_Exc_[0131,1173]_Inh_[0056,1338]_per100ms__simXsec_128x6_randseed_400092.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[195/300] L5PC_sim__Output_spikes_0873__Input_ranges_Exc_[0118,1151]_Inh_[0047,1320]_per100ms__simXsec_128x6_randseed_1110089.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[196/300] L5PC_sim__Output_spikes_0874__Input_ranges_Exc_[0108,1177]_Inh_[0048,1332]_per100ms__simXsec_128x6_randseed_100024.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[197/300] L5PC_sim__Output_spikes_0874__Input_ranges_Exc_[0121,1160]_Inh_[0060,1312]_per100ms__simXsec_128x6_randseed_1110185.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[198/300] L5PC_sim__Output_spikes_0874__Input_ranges_Exc_[0123,1206]_Inh_[0041,1357]_per100ms__simXsec_128x6_randseed_800107.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[199/300] L5PC_sim__Output_spikes_0874__Input_ranges_Exc_[0131,1116]_Inh_[0039,1260]_per100ms__simXsec_128x6_randseed_700159.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[200/300] L5PC_sim__Output_spikes_0875__Input_ranges_Exc_[0111,1177]_Inh_[0039,1332]_per100ms__simXsec_128x6_randseed_1110153.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[201/300] L5PC_sim__Output_spikes_0875__Input_ranges_Exc_[0148,1177]_Inh_[0058,1331]_per100ms__simXsec_128x6_randseed_500142.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[202/300] L5PC_sim__Output_spikes_0876__Input_ranges_Exc_[0136,1147]_Inh_[0061,1302]_per100ms__simXsec_128x6_randseed_1110093.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[203/300] L5PC_sim__Output_spikes_0876__Input_ranges_Exc_[0153,1188]_Inh_[0080,1347]_per100ms__simXsec_128x6_randseed_700174.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[204/300] L5PC_sim__Output_spikes_0877__Input_ranges_Exc_[0116,1132]_Inh_[0039,1246]_per100ms__simXsec_128x6_randseed_1110220.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[205/300] L5PC_sim__Output_spikes_0877__Input_ranges_Exc_[0117,1179]_Inh_[0036,1344]_per100ms__simXsec_128x6_randseed_1110170.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[206/300] L5PC_sim__Output_spikes_0877__Input_ranges_Exc_[0119,1140]_Inh_[0050,1281]_per100ms__simXsec_128x6_randseed_1110158.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[207/300] L5PC_sim__Output_spikes_0877__Input_ranges_Exc_[0125,1181]_Inh_[0042,1331]_per100ms__simXsec_128x6_randseed_600044.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[208/300] L5PC_sim__Output_spikes_0877__Input_ranges_Exc_[0132,1184]_Inh_[0049,1334]_per100ms__simXsec_128x6_randseed_1110032.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[209/300] L5PC_sim__Output_spikes_0877__Input_ranges_Exc_[0137,1161]_Inh_[0060,1296]_per100ms__simXsec_128x6_randseed_1110104.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[210/300] L5PC_sim__Output_spikes_0878__Input_ranges_Exc_[0108,1137]_Inh_[0031,1273]_per100ms__simXsec_128x6_randseed_400090.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[211/300] L5PC_sim__Output_spikes_0878__Input_ranges_Exc_[0124,1153]_Inh_[0043,1299]_per100ms__simXsec_128x6_randseed_1110027.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[212/300] L5PC_sim__Output_spikes_0878__Input_ranges_Exc_[0129,1163]_Inh_[0035,1297]_per100ms__simXsec_128x6_randseed_1110057.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[213/300] L5PC_sim__Output_spikes_0878__Input_ranges_Exc_[0129,1174]_Inh_[0044,1315]_per100ms__simXsec_128x6_randseed_400093.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[214/300] L5PC_sim__Output_spikes_0878__Input_ranges_Exc_[0136,1159]_Inh_[0050,1301]_per100ms__simXsec_128x6_randseed_200046.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=612)
+[215/300] L5PC_sim__Output_spikes_0879__Input_ranges_Exc_[0113,1121]_Inh_[0041,1253]_per100ms__simXsec_128x6_randseed_300064.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[216/300] L5PC_sim__Output_spikes_0879__Input_ranges_Exc_[0141,1172]_Inh_[0040,1315]_per100ms__simXsec_128x6_randseed_600056.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[217/300] L5PC_sim__Output_spikes_0880__Input_ranges_Exc_[0111,1183]_Inh_[0029,1348]_per100ms__simXsec_128x6_randseed_1110231.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[218/300] L5PC_sim__Output_spikes_0880__Input_ranges_Exc_[0117,1161]_Inh_[0027,1310]_per100ms__simXsec_128x6_randseed_500203.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[219/300] L5PC_sim__Output_spikes_0880__Input_ranges_Exc_[0130,1151]_Inh_[0034,1299]_per100ms__simXsec_128x6_randseed_1110007.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[220/300] L5PC_sim__Output_spikes_0880__Input_ranges_Exc_[0131,1185]_Inh_[0071,1342]_per100ms__simXsec_128x6_randseed_1110301.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[221/300] L5PC_sim__Output_spikes_0881__Input_ranges_Exc_[0112,1191]_Inh_[0036,1336]_per100ms__simXsec_128x6_randseed_1110256.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[222/300] L5PC_sim__Output_spikes_0881__Input_ranges_Exc_[0120,1183]_Inh_[0061,1338]_per100ms__simXsec_128x6_randseed_1110183.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[223/300] L5PC_sim__Output_spikes_0881__Input_ranges_Exc_[0125,1164]_Inh_[0038,1326]_per100ms__simXsec_128x6_randseed_500169.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[224/300] L5PC_sim__Output_spikes_0881__Input_ranges_Exc_[0129,1168]_Inh_[0049,1312]_per100ms__simXsec_128x6_randseed_700134.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[225/300] L5PC_sim__Output_spikes_0881__Input_ranges_Exc_[0135,1146]_Inh_[0062,1289]_per100ms__simXsec_128x6_randseed_600052.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[226/300] L5PC_sim__Output_spikes_0881__Input_ranges_Exc_[0139,1170]_Inh_[0066,1318]_per100ms__simXsec_128x6_randseed_800150.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[227/300] L5PC_sim__Output_spikes_0882__Input_ranges_Exc_[0112,1192]_Inh_[0045,1355]_per100ms__simXsec_128x6_randseed_1110200.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[228/300] L5PC_sim__Output_spikes_0882__Input_ranges_Exc_[0126,1160]_Inh_[0046,1304]_per100ms__simXsec_128x6_randseed_800148.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[229/300] L5PC_sim__Output_spikes_0882__Input_ranges_Exc_[0127,1147]_Inh_[0053,1292]_per100ms__simXsec_128x6_randseed_1110152.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[230/300] L5PC_sim__Output_spikes_0882__Input_ranges_Exc_[0139,1199]_Inh_[0061,1323]_per100ms__simXsec_128x6_randseed_1110189.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[231/300] L5PC_sim__Output_spikes_0884__Input_ranges_Exc_[0133,1182]_Inh_[0057,1346]_per100ms__simXsec_128x6_randseed_700129.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[232/300] L5PC_sim__Output_spikes_0885__Input_ranges_Exc_[0114,1120]_Inh_[0038,1271]_per100ms__simXsec_128x6_randseed_1110102.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=213)
+[233/300] L5PC_sim__Output_spikes_0885__Input_ranges_Exc_[0149,1128]_Inh_[0065,1271]_per100ms__simXsec_128x6_randseed_1110019.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[234/300] L5PC_sim__Output_spikes_0886__Input_ranges_Exc_[0119,1185]_Inh_[0042,1335]_per100ms__simXsec_128x6_randseed_400107.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[235/300] L5PC_sim__Output_spikes_0886__Input_ranges_Exc_[0124,1122]_Inh_[0050,1273]_per100ms__simXsec_128x6_randseed_400083.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[236/300] L5PC_sim__Output_spikes_0886__Input_ranges_Exc_[0128,1163]_Inh_[0054,1292]_per100ms__simXsec_128x6_randseed_300075.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[237/300] L5PC_sim__Output_spikes_0886__Input_ranges_Exc_[0135,1158]_Inh_[0051,1316]_per100ms__simXsec_128x6_randseed_800103.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[238/300] L5PC_sim__Output_spikes_0887__Input_ranges_Exc_[0139,1160]_Inh_[0047,1284]_per100ms__simXsec_128x6_randseed_700126.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[239/300] L5PC_sim__Output_spikes_0888__Input_ranges_Exc_[0125,1153]_Inh_[0051,1275]_per100ms__simXsec_128x6_randseed_1110003.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=621)
+[240/300] L5PC_sim__Output_spikes_0888__Input_ranges_Exc_[0136,1166]_Inh_[0055,1302]_per100ms__simXsec_128x6_randseed_1110058.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[241/300] L5PC_sim__Output_spikes_0888__Input_ranges_Exc_[0142,1160]_Inh_[0058,1320]_per100ms__simXsec_128x6_randseed_1110304.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[242/300] L5PC_sim__Output_spikes_0889__Input_ranges_Exc_[0126,1200]_Inh_[0052,1346]_per100ms__simXsec_128x6_randseed_1110132.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[243/300] L5PC_sim__Output_spikes_0889__Input_ranges_Exc_[0141,1164]_Inh_[0059,1302]_per100ms__simXsec_128x6_randseed_500172.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[244/300] L5PC_sim__Output_spikes_0890__Input_ranges_Exc_[0122,1145]_Inh_[0033,1276]_per100ms__simXsec_128x6_randseed_1110226.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[245/300] L5PC_sim__Output_spikes_0890__Input_ranges_Exc_[0123,1195]_Inh_[0044,1339]_per100ms__simXsec_128x6_randseed_700124.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[246/300] L5PC_sim__Output_spikes_0890__Input_ranges_Exc_[0158,1187]_Inh_[0081,1326]_per100ms__simXsec_128x6_randseed_200045.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[247/300] L5PC_sim__Output_spikes_0891__Input_ranges_Exc_[0121,1193]_Inh_[0045,1339]_per100ms__simXsec_128x6_randseed_1110087.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[248/300] L5PC_sim__Output_spikes_0891__Input_ranges_Exc_[0123,1168]_Inh_[0037,1321]_per100ms__simXsec_128x6_randseed_1110031.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[249/300] L5PC_sim__Output_spikes_0893__Input_ranges_Exc_[0114,1167]_Inh_[0050,1330]_per100ms__simXsec_128x6_randseed_1110036.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=163)
+[250/300] L5PC_sim__Output_spikes_0894__Input_ranges_Exc_[0133,1192]_Inh_[0047,1344]_per100ms__simXsec_128x6_randseed_800114.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[251/300] L5PC_sim__Output_spikes_0895__Input_ranges_Exc_[0132,1155]_Inh_[0053,1302]_per100ms__simXsec_128x6_randseed_1110251.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[252/300] L5PC_sim__Output_spikes_0896__Input_ranges_Exc_[0133,1177]_Inh_[0042,1334]_per100ms__simXsec_128x6_randseed_1110276.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[253/300] L5PC_sim__Output_spikes_0898__Input_ranges_Exc_[0138,1195]_Inh_[0054,1347]_per100ms__simXsec_128x6_randseed_400085.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[254/300] L5PC_sim__Output_spikes_0899__Input_ranges_Exc_[0131,1195]_Inh_[0045,1332]_per100ms__simXsec_128x6_randseed_1110037.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[255/300] L5PC_sim__Output_spikes_0900__Input_ranges_Exc_[0124,1169]_Inh_[0049,1303]_per100ms__simXsec_128x6_randseed_500206.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[256/300] L5PC_sim__Output_spikes_0901__Input_ranges_Exc_[0133,1148]_Inh_[0053,1281]_per100ms__simXsec_128x6_randseed_1110059.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=44)
+[257/300] L5PC_sim__Output_spikes_0903__Input_ranges_Exc_[0136,1197]_Inh_[0061,1348]_per100ms__simXsec_128x6_randseed_800105.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[258/300] L5PC_sim__Output_spikes_0905__Input_ranges_Exc_[0128,1190]_Inh_[0040,1341]_per100ms__simXsec_128x6_randseed_800144.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[259/300] L5PC_sim__Output_spikes_0907__Input_ranges_Exc_[0128,1155]_Inh_[0032,1317]_per100ms__simXsec_128x6_randseed_1110041.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[260/300] L5PC_sim__Output_spikes_0909__Input_ranges_Exc_[0128,1170]_Inh_[0052,1302]_per100ms__simXsec_128x6_randseed_1110194.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[261/300] L5PC_sim__Output_spikes_0910__Input_ranges_Exc_[0130,1175]_Inh_[0055,1330]_per100ms__simXsec_128x6_randseed_700147.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[262/300] L5PC_sim__Output_spikes_0911__Input_ranges_Exc_[0129,1179]_Inh_[0059,1352]_per100ms__simXsec_128x6_randseed_1110147.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[263/300] L5PC_sim__Output_spikes_0912__Input_ranges_Exc_[0138,1184]_Inh_[0045,1351]_per100ms__simXsec_128x6_randseed_500144.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[264/300] L5PC_sim__Output_spikes_0913__Input_ranges_Exc_[0120,1139]_Inh_[0049,1270]_per100ms__simXsec_128x6_randseed_300088.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[265/300] L5PC_sim__Output_spikes_0914__Input_ranges_Exc_[0135,1188]_Inh_[0058,1346]_per100ms__simXsec_128x6_randseed_200050.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[266/300] L5PC_sim__Output_spikes_0915__Input_ranges_Exc_[0133,1174]_Inh_[0059,1295]_per100ms__simXsec_128x6_randseed_1110275.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[267/300] L5PC_sim__Output_spikes_0917__Input_ranges_Exc_[0116,1186]_Inh_[0022,1345]_per100ms__simXsec_128x6_randseed_1110213.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[268/300] L5PC_sim__Output_spikes_0919__Input_ranges_Exc_[0131,1132]_Inh_[0055,1272]_per100ms__simXsec_128x6_randseed_600054.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[269/300] L5PC_sim__Output_spikes_0920__Input_ranges_Exc_[0150,1198]_Inh_[0064,1362]_per100ms__simXsec_128x6_randseed_1110179.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[270/300] L5PC_sim__Output_spikes_0922__Input_ranges_Exc_[0127,1205]_Inh_[0044,1369]_per100ms__simXsec_128x6_randseed_1110108.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[271/300] L5PC_sim__Output_spikes_0925__Input_ranges_Exc_[0109,1172]_Inh_[0025,1305]_per100ms__simXsec_128x6_randseed_600046.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[272/300] L5PC_sim__Output_spikes_0927__Input_ranges_Exc_[0110,1136]_Inh_[0031,1298]_per100ms__simXsec_128x6_randseed_300070.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[273/300] L5PC_sim__Output_spikes_0928__Input_ranges_Exc_[0128,1161]_Inh_[0057,1312]_per100ms__simXsec_128x6_randseed_1110274.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[274/300] L5PC_sim__Output_spikes_0929__Input_ranges_Exc_[0125,1168]_Inh_[0039,1310]_per100ms__simXsec_128x6_randseed_200053.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[275/300] L5PC_sim__Output_spikes_0930__Input_ranges_Exc_[0116,1176]_Inh_[0025,1325]_per100ms__simXsec_128x6_randseed_1110260.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[276/300] L5PC_sim__Output_spikes_0931__Input_ranges_Exc_[0115,1133]_Inh_[0029,1255]_per100ms__simXsec_128x6_randseed_700140.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[277/300] L5PC_sim__Output_spikes_0932__Input_ranges_Exc_[0133,1172]_Inh_[0053,1326]_per100ms__simXsec_128x6_randseed_1110230.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[278/300] L5PC_sim__Output_spikes_0934__Input_ranges_Exc_[0137,1143]_Inh_[0055,1309]_per100ms__simXsec_128x6_randseed_1110088.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[279/300] L5PC_sim__Output_spikes_0937__Input_ranges_Exc_[0136,1158]_Inh_[0045,1284]_per100ms__simXsec_128x6_randseed_400111.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[280/300] L5PC_sim__Output_spikes_0939__Input_ranges_Exc_[0145,1201]_Inh_[0065,1343]_per100ms__simXsec_128x6_randseed_1110064.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[281/300] L5PC_sim__Output_spikes_0940__Input_ranges_Exc_[0116,1154]_Inh_[0033,1281]_per100ms__simXsec_128x6_randseed_1110129.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[282/300] L5PC_sim__Output_spikes_0941__Input_ranges_Exc_[0121,1177]_Inh_[0055,1322]_per100ms__simXsec_128x6_randseed_1110065.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[283/300] L5PC_sim__Output_spikes_0943__Input_ranges_Exc_[0129,1163]_Inh_[0043,1333]_per100ms__simXsec_128x6_randseed_500208.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[284/300] L5PC_sim__Output_spikes_0944__Input_ranges_Exc_[0114,1149]_Inh_[0040,1282]_per100ms__simXsec_128x6_randseed_500178.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[285/300] L5PC_sim__Output_spikes_0947__Input_ranges_Exc_[0137,1139]_Inh_[0046,1273]_per100ms__simXsec_128x6_randseed_800129.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[286/300] L5PC_sim__Output_spikes_0949__Input_ranges_Exc_[0106,1138]_Inh_[0029,1292]_per100ms__simXsec_128x6_randseed_600043.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[287/300] L5PC_sim__Output_spikes_0950__Input_ranges_Exc_[0117,1151]_Inh_[0037,1290]_per100ms__simXsec_128x6_randseed_1110240.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[288/300] L5PC_sim__Output_spikes_0952__Input_ranges_Exc_[0130,1215]_Inh_[0049,1384]_per100ms__simXsec_128x6_randseed_400081.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[289/300] L5PC_sim__Output_spikes_0955__Input_ranges_Exc_[0137,1150]_Inh_[0041,1295]_per100ms__simXsec_128x6_randseed_700180.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[290/300] L5PC_sim__Output_spikes_0956__Input_ranges_Exc_[0131,1163]_Inh_[0058,1314]_per100ms__simXsec_128x6_randseed_1110148.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[291/300] L5PC_sim__Output_spikes_0959__Input_ranges_Exc_[0122,1166]_Inh_[0028,1283]_per100ms__simXsec_128x6_randseed_800104.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[292/300] L5PC_sim__Output_spikes_0959__Input_ranges_Exc_[0143,1184]_Inh_[0052,1331]_per100ms__simXsec_128x6_randseed_1110006.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[293/300] L5PC_sim__Output_spikes_0960__Input_ranges_Exc_[0120,1165]_Inh_[0019,1295]_per100ms__simXsec_128x6_randseed_500192.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[294/300] L5PC_sim__Output_spikes_0960__Input_ranges_Exc_[0133,1182]_Inh_[0035,1332]_per100ms__simXsec_128x6_randseed_700165.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[295/300] L5PC_sim__Output_spikes_0962__Input_ranges_Exc_[0123,1137]_Inh_[0039,1271]_per100ms__simXsec_128x6_randseed_700166.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[296/300] L5PC_sim__Output_spikes_0963__Input_ranges_Exc_[0106,1156]_Inh_[0031,1313]_per100ms__simXsec_128x6_randseed_1110055.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[297/300] L5PC_sim__Output_spikes_0965__Input_ranges_Exc_[0126,1167]_Inh_[0031,1306]_per100ms__simXsec_128x6_randseed_1110229.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[298/300] L5PC_sim__Output_spikes_0967__Input_ranges_Exc_[0136,1160]_Inh_[0057,1328]_per100ms__simXsec_128x6_randseed_1110277.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[299/300] L5PC_sim__Output_spikes_0968__Input_ranges_Exc_[0130,1183]_Inh_[0040,1350]_per100ms__simXsec_128x6_randseed_1110099.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+[300/300] L5PC_sim__Output_spikes_0969__Input_ranges_Exc_[0131,1162]_Inh_[0057,1302]_per100ms__simXsec_128x6_randseed_1110123.p | sims=128 | total_segments=639 | first_sim(exc=639,inh=639) | ✓ 符合要求
+
+=== 检查结果 ===
+总文件数: 300
+符合要求 (sims=128, first_sim_exc=639, first_sim_inh=639): 288
+不符合要求: 12
+
+✗ 发现 12 个不符合要求的文件，请检查或排除后再训练。
+
+不符合要求的文件详情:
+  L5PC_sim__Output_spikes_1005__Input_ranges_Exc_[0131,1181]_Inh_[0043,1323]_per100ms__simXsec_128x6_randseed_1110076.p | 问题: first_sim_exc=618(应为639), first_sim_inh=157(应为639)
+  L5PC_sim__Output_spikes_0791__Input_ranges_Exc_[0128,1138]_Inh_[0043,1256]_per100ms__simXsec_128x6_randseed_500188.p | 问题: first_sim_inh=578(应为639)
+  L5PC_sim__Output_spikes_0819__Input_ranges_Exc_[0161,1192]_Inh_[0078,1355]_per100ms__simXsec_128x6_randseed_500205.p | 问题: first_sim_inh=637(应为639)
+  L5PC_sim__Output_spikes_0829__Input_ranges_Exc_[0137,1142]_Inh_[0055,1290]_per100ms__simXsec_128x6_randseed_1110009.p | 问题: first_sim_inh=634(应为639)
+  L5PC_sim__Output_spikes_0835__Input_ranges_Exc_[0112,1129]_Inh_[0040,1277]_per100ms__simXsec_128x6_randseed_700152.p | 问题: first_sim_inh=621(应为639)
+  L5PC_sim__Output_spikes_0852__Input_ranges_Exc_[0135,1143]_Inh_[0047,1285]_per100ms__simXsec_128x6_randseed_1110127.p | 问题: first_sim_inh=304(应为639)
+  L5PC_sim__Output_spikes_0861__Input_ranges_Exc_[0138,1150]_Inh_[0064,1303]_per100ms__simXsec_128x6_randseed_800101.p | 问题: first_sim_inh=102(应为639)
+  L5PC_sim__Output_spikes_0878__Input_ranges_Exc_[0136,1159]_Inh_[0050,1301]_per100ms__simXsec_128x6_randseed_200046.p | 问题: first_sim_inh=612(应为639)
+  L5PC_sim__Output_spikes_0885__Input_ranges_Exc_[0114,1120]_Inh_[0038,1271]_per100ms__simXsec_128x6_randseed_1110102.p | 问题: first_sim_inh=213(应为639)
+  L5PC_sim__Output_spikes_0888__Input_ranges_Exc_[0125,1153]_Inh_[0051,1275]_per100ms__simXsec_128x6_randseed_1110003.p | 问题: first_sim_inh=621(应为639)
+  L5PC_sim__Output_spikes_0893__Input_ranges_Exc_[0114,1167]_Inh_[0050,1330]_per100ms__simXsec_128x6_randseed_1110036.p | 问题: first_sim_inh=163(应为639)
+  L5PC_sim__Output_spikes_0901__Input_ranges_Exc_[0133,1148]_Inh_[0053,1281]_per100ms__simXsec_128x6_randseed_1110059.p | 问题: first_sim_inh=44(应为639)
