@@ -206,9 +206,10 @@ class OptimizedDatasetPipeline:
             return None
 
     def convert_from_paths_parallel(self, exp_paths, batch_size=50):
-        """Convert multiple experiments using parallel processing"""
+        """Convert multiple experiments using parallel processing with trial index tracking"""
         all_sim_dicts = []
         params_list = []
+        trial_mapping = {}  # 存储映射关系
         
         print(f"Processing {len(exp_paths)} experiments using {self.n_workers} workers...")
         
@@ -229,6 +230,20 @@ class OptimizedDatasetPipeline:
                         result = future.result()
                         if result is not None:
                             sim_dict, simu_info = result
+                            
+                            # 获取当前simulation的索引
+                            sim_index = len(all_sim_dicts)
+                            
+                            # 从实验路径中提取trial index
+                            trial_index = self._extract_trial_index_from_path(exp)
+                            
+                            # 存储映射关系
+                            trial_mapping[sim_index] = {
+                                'trial_index': trial_index,
+                                'exp_path': exp,
+                                'sim_index': sim_index
+                            }
+                            
                             all_sim_dicts.append(sim_dict)
                             params_list.append(simu_info)
                     except Exception as e:
@@ -239,7 +254,8 @@ class OptimizedDatasetPipeline:
             'Params': params,
             'Results': {
                 'listOfSingleSimulationDicts': all_sim_dicts
-            }
+            },
+            'TrialMapping': trial_mapping  # 添加映射信息
         }
         
         print(f"Successfully processed {len(all_sim_dicts)} experiments")
@@ -251,12 +267,13 @@ class OptimizedDatasetPipeline:
             pickle.dump(final_data, f)
 
     def split_pickle_file(self, input_file='output.pkl', num_files=10):
-        """Split large pickle file into smaller files"""
+        """Split large pickle file into smaller files with trial index tracking"""
         # Read the large pickle file
         with open(input_file, 'rb') as f:
             data = pickle.load(f)
 
         all_trials = data['Results']['listOfSingleSimulationDicts']
+        trial_mapping = data.get('TrialMapping', {})
         total_trials = len(all_trials)
         trials_per_file = total_trials // num_files
 
@@ -267,12 +284,17 @@ class OptimizedDatasetPipeline:
             end = (i + 1) * trials_per_file if i < (num_files - 1) else total_trials
             sub_trials = all_trials[start:end]
             
+            # 提取对应的trial mapping
+            sub_mapping = {k: v for k, v in trial_mapping.items() 
+                          if start <= k < end}
+            
             # Create sub-dictionary
             sub_data = {
                 'Params': data['Params'],
                 'Results': {
                     'listOfSingleSimulationDicts': sub_trials
-                }
+                },
+                'TrialMapping': sub_mapping  # 包含映射信息
             }
             
             # Save as pickle
@@ -283,7 +305,7 @@ class OptimizedDatasetPipeline:
         print("Splitting completed!")
 
     def organize_dataset(self, train_ratio=0.7, valid_ratio=0.2, test_ratio=0.1):
-        """Organize split files into train/validation/test sets"""
+        """Organize split files into train/validation/test sets with trial index tracking"""
         # Get all .p files
         files = sorted(glob.glob(os.path.join(self.output_dir, '*.p')))
         
@@ -305,16 +327,76 @@ class OptimizedDatasetPipeline:
         self._copy_files(valid_files, self.valid_dir)
         self._copy_files(test_files, self.test_dir)
         
+        # 提取test set的trial indices
+        test_trial_indices = self._extract_trial_indices_from_files(test_files)
+        
         print(f"Dataset organized:")
         print(f"  Training set: {len(train_files)} files")
         print(f"  Validation set: {len(valid_files)} files")
         print(f"  Test set: {len(test_files)} files")
+        print(f"  Test set trial indices: {sorted(test_trial_indices)}")
+        
+        # 保存test set的trial indices到文件
+        self._save_test_trial_indices(test_trial_indices)
+        
+        return test_trial_indices
 
     def _copy_files(self, file_list, target_dir):
         """Copy files to target directory"""
         for file_path in tqdm.tqdm(file_list, desc=f"Copying to {os.path.basename(target_dir)}"):
             filename = os.path.basename(file_path)
             shutil.copy2(file_path, os.path.join(target_dir, filename))
+    
+    def _extract_trial_index_from_path(self, exp_path):
+        """从实验路径中提取trial index"""
+        # 假设路径格式为: 'basal_range0_clus_invivo_NATURAL_funcgroup2_var2_AMPA/1/{trial_index}'
+        parts = exp_path.split('/')
+        if len(parts) >= 3:
+            try:
+                return int(parts[-1])  # 最后一部分是trial index
+            except ValueError:
+                return None
+        return None
+    
+    def _extract_trial_indices_from_files(self, file_list):
+        """从文件列表中提取trial indices"""
+        all_trial_indices = []
+        
+        for file_path in file_list:
+            try:
+                with open(file_path, 'rb') as f:
+                    data = pickle.load(f)
+                
+                trial_mapping = data.get('TrialMapping', {})
+                file_trial_indices = [mapping['trial_index'] for mapping in trial_mapping.values()]
+                all_trial_indices.extend(file_trial_indices)
+                
+            except Exception as e:
+                print(f"Error reading file {file_path}: {e}")
+        
+        return all_trial_indices
+    
+    def _save_test_trial_indices(self, test_trial_indices):
+        """保存test set的trial indices到文件"""
+        test_indices_file = os.path.join(self.output_dir, 'test_trial_indices.json')
+        with open(test_indices_file, 'w') as f:
+            json.dump({
+                'test_trial_indices': sorted(test_trial_indices),
+                'total_test_trials': len(test_trial_indices)
+            }, f, indent=2)
+        
+        print(f"Test trial indices saved to: {test_indices_file}")
+    
+    def load_test_trial_indices(self):
+        """加载test set的trial indices"""
+        test_indices_file = os.path.join(self.output_dir, 'test_trial_indices.json')
+        if os.path.exists(test_indices_file):
+            with open(test_indices_file, 'r') as f:
+                data = json.load(f)
+            return data['test_trial_indices']
+        else:
+            print(f"Test trial indices file not found: {test_indices_file}")
+            return []
 
     def run_full_pipeline(self, exp_paths, num_files=10, batch_size=50, train_ratio=0.7, valid_ratio=0.2, test_ratio=0.1):
         """
@@ -327,6 +409,9 @@ class OptimizedDatasetPipeline:
             valid_ratio: Ratio of files for validation
             test_ratio: Ratio of files for testing
             batch_size: Number of experiments to process in each batch
+            
+        Returns:
+            test_trial_indices: List of trial indices in the test set
         """
         print("Starting optimized dataset pipeline...")
         print(f"Total experiments: {len(exp_paths)}")
@@ -346,21 +431,27 @@ class OptimizedDatasetPipeline:
         
         # Step 3: Organize files into train/validation/test sets
         print("Step 3: Organizing dataset...")
-        self.organize_dataset(train_ratio, valid_ratio, test_ratio)
+        test_trial_indices = self.organize_dataset(train_ratio, valid_ratio, test_ratio)
         print("Step 3 completed: Dataset organized")
         
         print("Optimized pipeline completed successfully!")
-
+        print(f"Test set contains {len(test_trial_indices)} trials: {sorted(test_trial_indices)}")
 
 # Example usage
 if __name__ == "__main__":
-    # Define experiment paths
-    exp_paths = [f'basal_range0_clus_invivo_NATURAL_funcgroup2_var2/1/{i}' for i in range(1, 3001)]
+    # Define base paths
+    base_path = '/G/results/aim2_sjc'
+    project_name = 'funcgroup2_var2_AMPA'
     
-    output_dir = '/G/results/aim2_sjc/Data/full_output_dataset_funcgroup2_var2/'
-    train_dir = '/G/results/aim2_sjc/Models_TCN/Single_Neuron_InOut_SJC_funcgroup2_var2/data/L5PC_NMDA_train/'
-    valid_dir = '/G/results/aim2_sjc/Models_TCN/Single_Neuron_InOut_SJC_funcgroup2_var2/data/L5PC_NMDA_valid/'
-    test_dir = '/G/results/aim2_sjc/Models_TCN/Single_Neuron_InOut_SJC_funcgroup2_var2/data/L5PC_NMDA_test/'
+    # Define experiment paths
+    num_trials = 1000
+    exp_paths = [f'basal_range0_clus_invivo_NATURAL_{project_name}/1/{i}' for i in range(1, num_trials + 1)]
+    
+    # Build directory paths using base paths
+    output_dir = f'{base_path}/Data/full_output_dataset_{project_name}/'
+    train_dir = f'{base_path}/Models_TCN/Single_Neuron_InOut_SJC_{project_name}/data/L5PC_AMPA_train/'
+    valid_dir = f'{base_path}/Models_TCN/Single_Neuron_InOut_SJC_{project_name}/data/L5PC_AMPA_valid/'
+    test_dir = f'{base_path}/Models_TCN/Single_Neuron_InOut_SJC_{project_name}/data/L5PC_AMPA_test/'
 
     # Create optimized pipeline instance
     pipeline = OptimizedDatasetPipeline(
@@ -377,6 +468,6 @@ if __name__ == "__main__":
     # Run the complete optimized pipeline
     pipeline.run_full_pipeline(
         exp_paths=exp_paths, 
-        num_files=30, 
+        num_files=num_trials // 100, 
         batch_size=10  # Process 50 experiments at a time
     ) 

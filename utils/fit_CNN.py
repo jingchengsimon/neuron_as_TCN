@@ -1,13 +1,8 @@
 import numpy as np
-import pandas as pd
-import glob
 import time
 import sys
 import os
 import pickle
-import matplotlib.pyplot as plt
-import seaborn as sns
-from pathlib import Path
 
 # 设置TensorFlow日志级别，减少警告信息
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
@@ -18,16 +13,15 @@ tf.disable_v2_behavior()
 tf.logging.set_verbosity(tf.logging.ERROR)
 
 import keras
-from keras.models import Model, load_model
-from keras.optimizers import SGD, Nadam
+from keras.models import Model
+from keras.optimizers import Nadam
 from keras.layers import BatchNormalization
-from keras.layers import Dense, Dropout, Activation, Flatten, Input, TimeDistributed, Reshape, Permute
-from keras.layers import Conv2D, MaxPooling2D, AveragePooling2D, Conv1D, Cropping1D, UpSampling1D, MaxPooling1D, AveragePooling1D
-from keras.layers import LeakyReLU, PReLU, ELU
-from keras.regularizers import l1,l2,l1_l2
+from keras.layers import Input
+from keras.layers import Conv1D
+from keras.layers import LeakyReLU
+from keras.regularizers import l2
 from keras import initializers
-from sklearn import decomposition
-from datetime import datetime  
+
 
 # some fixes for python 3
 if sys.version_info[0]<3:
@@ -196,7 +190,7 @@ def create_temporaly_convolutional_model(max_input_window_size, num_segments_exc
         # 使用改进的loss权重
         temporaly_convolutional_network_model.compile(optimizer=optimizer_to_use,
                                                       loss=[focal_loss(), 'mse'],
-                                                      loss_weights=[1.0, 0.1])  # 增加voltage loss权重从0.006到0.1
+                                                      loss_weights=[1.0, 0.1])  
     else:
         print("使用原有Loss函数...")
         # 原有loss配置
@@ -245,8 +239,6 @@ class SimulationDataGenerator(keras.utils.Sequence):
         self.y_soma_threshold = y_soma_threshold
         self.use_improved_sampling = use_improved_sampling
         self.spike_rich_ratio = spike_rich_ratio
-        
-        # self.y_DTV_threshold = y_DTV_threshold
         
         self.curr_epoch_files_to_use = None
         self.on_epoch_end()

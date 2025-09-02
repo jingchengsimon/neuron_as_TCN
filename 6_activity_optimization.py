@@ -588,7 +588,7 @@ def main():
     
     # 执行优化
     optimized_firing_rates, loss_history, fixed_exc_indices = optimizer.optimize_activity(
-        num_iterations=200,
+        num_iterations=500,
         learning_rate=0.001,
         batch_size=1,
         target_spike_prob=0.8,

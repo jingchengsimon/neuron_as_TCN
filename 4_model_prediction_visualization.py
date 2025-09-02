@@ -8,6 +8,7 @@ import random
 from utils.find_best_model import find_best_model
 from sklearn.metrics import roc_curve
 from tqdm.auto import tqdm
+import tensorflow as tf
 
 class ModelPredictionVisualizer:
     """模型预测可视化类，用于比较模型预测结果和真实输出"""
@@ -32,7 +33,7 @@ class ModelPredictionVisualizer:
         
         # 创建输出目录 - 使用模型参数命名而不是时间戳
         model_dir_name = self.extract_model_directory_name(model_path)
-        self.output_dir = f"./Results/model_prediction_analysis/{model_dir_name}/simu_trial_{sim_idx}/"
+        self.output_dir = f"./results/4_model_prediction_analysis/{model_dir_name}/simu_trial_{sim_idx}/"
         os.makedirs(self.output_dir, exist_ok=True)
         
         print(f"模型预测可视化器初始化完成")
@@ -57,21 +58,52 @@ class ModelPredictionVisualizer:
         try:
             path_parts = path.split('/')
             model_params_dir = None
-            dataset_identifier = 'original'
+            
+            # 使用与5中相同的动态构建逻辑
+            # 找到包含'InOut'的部分的索引
+            inout_index = None
+            for i, part in enumerate(path_parts):
+                if 'InOut' in part:
+                    inout_index = i
+                    break
+            
+            if inout_index is not None:
+                # 提取'InOut'之后到下一个'/'前的内容
+                inout_part = path_parts[inout_index]
+                if 'InOut' in inout_part:
+                    # 获取'InOut'后的部分，去掉开头的下划线
+                    inout_suffix = inout_part.split('InOut')[-1]
+                    if inout_suffix.startswith('_'):
+                        inout_suffix = inout_suffix[1:]
+                else:
+                    inout_suffix = inout_part
+            else:
+                inout_suffix = 'original'
+            
+            # 找到包含模型策略的部分（通常是倒数第3个部分）
+            # 路径结构：.../models/AMPA_fullStrategy/depth_7_filters_256_window_400/
+            if len(path_parts) >= 3:
+                model_strategy_part = path_parts[-3]  # 倒数第3个部分
+            else:
+                model_strategy_part = path_parts[-1]
+            
+            # 从模型策略部分提取下划线后的内容
+            if '_' in model_strategy_part:
+                strategy_part = model_strategy_part.split('_', 1)[1]  # 获取第一个下划线后的部分
+            else:
+                strategy_part = model_strategy_part
+            
+            # 组合成base identifier
+            base_identifier = f"{inout_suffix}_{strategy_part}"
+            
+            # 为了保持向后兼容，设置dataset_identifier
+            dataset_identifier = base_identifier
 
+            # 查找模型参数目录
             for part in path_parts:
                 if 'depth_' in part and 'filters_' in part and 'window_' in part:
                     model_params_dir = part
-                elif 'SJC_funcgroup2_var2' in part:
-                    dataset_identifier = 'SJC_funcgroup2_var2'
-                elif 'largeSpikeWeight' in part:
-                    dataset_identifier = 'largeSpikeWeight'
-                elif 'SJC_funcgroup2' in part:
-                    dataset_identifier = 'SJC_funcgroup2'
-                elif 'SJC' in part:
-                    dataset_identifier = 'SJC'
-                elif 'fullStrategy' in part:
-                    dataset_identifier = 'original_fullStrategy'
+                    break
 
             # 解析参数，生成目录名
             directory_name = f"unknown_model_{dataset_identifier}"
@@ -86,19 +118,18 @@ class ModelPredictionVisualizer:
                     window = window_match.group(1)
                     directory_name = f"{depth}*{filters}*{window}_{dataset_identifier}"
 
-            # 映射测试数据目录
-            if dataset_identifier == 'original':
-                test_data_dir = "./Models_TCN/Single_Neuron_InOut/data/L5PC_NMDA_test/"
-            elif dataset_identifier == 'SJC':
-                test_data_dir = "./Models_TCN/Single_Neuron_InOut_SJC/data/L5PC_NMDA_test/"
-            elif dataset_identifier == 'SJC_funcgroup2':
-                test_data_dir = "./Models_TCN/Single_Neuron_InOut_SJC_funcgroup2/data/L5PC_NMDA_test/"
-            elif dataset_identifier == 'SJC_funcgroup2_var2' or dataset_identifier == 'largeSpikeWeight':
-                test_data_dir = "./Models_TCN/Single_Neuron_InOut_SJC_funcgroup2_var2/data/L5PC_NMDA_test/"
-            elif dataset_identifier == 'original_fullStrategy':
-                test_data_dir = "./Models_TCN/Single_Neuron_InOut/data/L5PC_NMDA_test/"
+            # 映射测试数据目录 - 基于inout_suffix进行映射
+            if inout_suffix == 'original':
+                test_data_dir = "/G/results/aim2_sjc/Models_TCN/Single_Neuron_InOut/data/L5PC_NMDA_test/"
             else:
-                test_data_dir = "./Models_TCN/Single_Neuron_InOut/data/L5PC_NMDA_test/"
+                # 动态构建路径：使用inout_suffix直接插入
+                # 检查是否包含AMPA来决定L5PC类型
+                if 'AMPA' in inout_suffix:
+                    l5pc_type = 'L5PC_AMPA'
+                else:
+                    l5pc_type = 'L5PC_NMDA'
+                
+                test_data_dir = f"/G/results/aim2_sjc/Models_TCN/Single_Neuron_InOut_{inout_suffix}/data/{l5pc_type}_test/"
 
             return {
                 'directory_name': directory_name,
@@ -125,7 +156,6 @@ class ModelPredictionVisualizer:
         try:
             # 启用GPU显存按需增长，避免一次性占满导致OOM
             try:
-                import tensorflow as tf
                 gpus = tf.config.list_physical_devices('GPU')
                 for gpu in gpus:
                     try:
@@ -140,9 +170,8 @@ class ModelPredictionVisualizer:
                 self.model = load_model(self.model_path)
             except Exception as e:
                 print(f"GPU加载失败({e})，尝试在CPU上加载模型...")
-                import tensorflow as tf
                 with tf.device('/CPU:0'):
-            self.model = load_model(self.model_path)
+                    self.model = load_model(self.model_path)
             print("模型加载成功!")
             
             # 获取模型信息
@@ -384,28 +413,28 @@ class ModelPredictionVisualizer:
         
         # 处理抑制性输入
         for i, (segment_id, spike_times) in enumerate(selected_sim['inhInputSpikeTimes'].items()):
-                if i < min(original_inh_count, num_segments_inh):
-                    segment_idx = min(original_exc_count, num_segments_exc) + i
-                    if segment_idx < num_segments_total:
-                        if hasattr(spike_times, '__len__') and len(spike_times) > 0:
-                            if isinstance(spike_times, np.ndarray):
-                                spike_times_array = spike_times.astype(float)
-                            else:
-                                spike_times_array = np.array(spike_times, dtype=float)
-                            
-                            mask = (spike_times_array >= 0) & (spike_times_array < sim_duration_ms)
-                            valid_spike_times = spike_times_array[mask]
-                            
-                            if len(valid_spike_times) > 0:
-                                spike_indices = valid_spike_times.astype(int)
-                                input_data[sim_idx, segment_idx, spike_indices] = True
-            
+            if i < min(original_inh_count, num_segments_inh):
+                segment_idx = min(original_exc_count, num_segments_exc) + i
+                if segment_idx < num_segments_total:
+                    if hasattr(spike_times, '__len__') and len(spike_times) > 0:
+                        if isinstance(spike_times, np.ndarray):
+                            spike_times_array = spike_times.astype(float)
+                        else:
+                            spike_times_array = np.array(spike_times, dtype=float)
+                        
+                        mask = (spike_times_array >= 0) & (spike_times_array < sim_duration_ms)
+                        valid_spike_times = spike_times_array[mask]
+                        
+                        if len(valid_spike_times) > 0:
+                            spike_indices = valid_spike_times.astype(int)
+                            input_data[sim_idx, segment_idx, spike_indices] = True
+        
             # 处理输出spikes
             output_spike_times = selected_sim['outputSpikeTimes']
             if hasattr(output_spike_times, '__len__') and len(output_spike_times) > 0:
                 if isinstance(output_spike_times, np.ndarray):
                     output_spike_times_array = output_spike_times.astype(float)
-            else:
+                else:
                     output_spike_times_array = np.array(output_spike_times, dtype=float)
                 
                 mask = (output_spike_times_array >= 0) & (output_spike_times_array < sim_duration_ms)
@@ -547,7 +576,7 @@ class ModelPredictionVisualizer:
             else:
                 # 单输出模型
                 if isinstance(prediction, list):
-                prediction = prediction[0]
+                    prediction = prediction[0]
                 if len(prediction.shape) == 3:
                     prediction = prediction[0]
                 if len(prediction.shape) > 1:
@@ -1087,12 +1116,9 @@ def main():
     
     # 配置参数 - 使用Single Neuron InOut中的数据和模型
     for sim_idx in range(5):
-       for models_dir in [
-                        #    "./Models_TCN/Single_Neuron_InOut/models/NMDA/depth_7_filters_256_window_400/",
-                           "./Models_TCN/Single_Neuron_InOut/models/NMDA_fullStrategy/depth_7_filters_256_window_400/",
-                        #    "./Models_TCN/Single_Neuron_InOut_SJC/models/NMDA/depth_7_filters_256_window_400/",
-                        #    "./Models_TCN/Single_Neuron_InOut_SJC_funcgroup2_var2/models/NMDA/depth_7_filters_256_window_400_new_params/",
-                        #    "./Models_TCN/Single_Neuron_InOut_SJC_funcgroup2_var2/models/NMDA_largeSpikeWeight/depth_7_filters_256_window_400/"
+        for models_dir in [
+                        #    "/G/results/aim2_sjc/Models_TCN/Single_Neuron_InOut_SJC_funcgroup2_var2/models/NMDA_fullStrategy_2/depth_7_filters_256_window_400/",
+                           "/G/results/aim2_sjc/Models_TCN/Single_Neuron_InOut_SJC_funcgroup2_var2_AMPA/models/AMPA_fullStrategy/depth_7_filters_256_window_400/",
                            ]:
 
             test_data_dir = ModelPredictionVisualizer.get_test_data_dir_for_model(models_dir)
@@ -1100,35 +1126,38 @@ def main():
             print(f"\n--- 处理模型目录: {models_dir} ---")
             print(f"动态选择的测试数据目录: {test_data_dir}")
     
-    # 查找最新的模型文件
+            # 查找最新的模型文件
             if os.path.isdir(models_dir):
                 model_path, params_path = find_best_model(models_dir)
     
-    # 检查文件是否存在
-            if not os.path.exists(models_dir):
+                # 检查文件是否存在
+                if not os.path.exists(models_dir):
+                    print(f"模型目录不存在: {models_dir}")
+                    continue
+                
+                if not os.path.exists(test_data_dir):
+                    print(f"测试数据目录不存在: {test_data_dir}")
+                    continue
+                
+                try:
+                    # 创建可视化器
+                    visualizer = ModelPredictionVisualizer(model_path, test_data_dir, sim_idx)
+        
+                    # 运行分析 - 需要加载足够的测试数据来计算ROC曲线
+                    results = visualizer.run_analysis(
+                        num_samples=1  # 加载5个测试文件用于ROC计算
+                    )
+        
+                    print(f"\n分析完成！共分析了 {len(results)} 个样本")
+                    print(f"所有结果和图表保存在: {visualizer.output_dir}")
+        
+                except Exception as e:
+                    print(f"分析过程中出现错误: {e}")
+                    import traceback
+                    traceback.print_exc()
+            else:
                 print(f"模型目录不存在: {models_dir}")
-        return
-    
-    if not os.path.exists(test_data_dir):
-        print(f"测试数据目录不存在: {test_data_dir}")
-        return
-    
-    try:
-        # 创建可视化器
-                visualizer = ModelPredictionVisualizer(model_path, test_data_dir, sim_idx)
-        
-                # 运行分析 - 需要加载足够的测试数据来计算ROC曲线
-        results = visualizer.run_analysis(
-                    num_samples=1  # 加载5个测试文件用于ROC计算
-        )
-        
-        print(f"\n分析完成！共分析了 {len(results)} 个样本")
-        print(f"所有结果和图表保存在: {visualizer.output_dir}")
-        
-    except Exception as e:
-        print(f"分析过程中出现错误: {e}")
-        import traceback
-        traceback.print_exc()
+                continue
 
 
 if __name__ == "__main__":

@@ -1,24 +1,22 @@
 import os
-import numpy as np
-import matplotlib
-import matplotlib.pyplot as plt
-import matplotlib.gridspec as gridspec
-import matplotlib.patches as mpatches
-from matplotlib.lines import Line2D
-from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 import glob
-from skimage.transform import resize
 import time
 import pickle
-import imageio
-from scipy import signal
-from keras.models import Model, load_model
+import numpy as np
+import matplotlib
+
+import matplotlib.pyplot as plt
+from mpl_toolkits.axes_grid1.inset_locator import inset_axes
+
+from keras.models import load_model
 from sklearn.metrics import mean_squared_error as MSE
 from sklearn.metrics import mean_absolute_error as MAE
 from sklearn.metrics import explained_variance_score
 from sklearn.metrics import roc_curve, auc
 from utils.find_best_model import find_best_model
-
+from utils.fit_CNN import parse_sim_experiment_file
+# 设置matplotlib后端，避免渲染器问题
+matplotlib.use('Agg')
 matplotlib.rcParams['pdf.fonttype'] = 42
 matplotlib.rcParams['svg.fonttype'] = 'none'
 
@@ -34,6 +32,39 @@ all_file_endings_to_use = ['.png', '.pdf', '.svg']
 
 ## helper functions
 
+def safe_save_fig(fig, save_path, dpi=300, bbox_inches='tight'):
+    """
+    安全保存matplotlib图像的函数，处理渲染器问题
+    """
+    try:
+        # 强制绘制图像
+        fig.canvas.draw()
+        
+        # 检查渲染器是否存在
+        if fig.canvas.get_renderer() is None:
+            fig.canvas.draw()
+        
+        # 尝试使用bbox_inches='tight'保存
+        if bbox_inches == 'tight':
+            plt.savefig(save_path, dpi=dpi, bbox_inches='tight', 
+                       facecolor='white', edgecolor='none')
+        else:
+            plt.savefig(save_path, dpi=dpi, facecolor='white', edgecolor='none')
+            
+    except Exception as e:
+        print(f'savefig with bbox_inches failed ({e}), trying without bbox_inches...')
+        try:
+            # 不使用bbox_inches重试
+            fig.canvas.draw()
+            plt.savefig(save_path, dpi=dpi, facecolor='white', edgecolor='none')
+        except Exception as e2:
+            print(f'savefig without bbox_inches failed ({e2}), trying lower dpi...')
+            try:
+                # 降低DPI重试
+                plt.savefig(save_path, dpi=150)
+            except Exception as e3:
+                print(f'All save attempts failed: {e3}')
+                raise e3
 
 def bin2dict(bin_spikes_matrix):
     spike_row_inds, spike_times = np.nonzero(bin_spikes_matrix)
@@ -45,120 +76,6 @@ def bin2dict(bin_spikes_matrix):
             row_inds_spike_times_map[row_ind] = [syn_time]
 
     return row_inds_spike_times_map
-
-
-# def dict2bin(row_inds_spike_times_map, num_segments, sim_duration_ms):
-    
-#     bin_spikes_matrix = np.zeros((num_segments, sim_duration_ms), dtype='bool')
-#     for row_ind in row_inds_spike_times_map.keys():
-#         for spike_time in row_inds_spike_times_map[row_ind]:
-#             bin_spikes_matrix[row_ind,spike_time] = 1.0
-    
-#     return bin_spikes_matrix
-
-
-# def parse_sim_experiment_file(sim_experiment_file):
-    
-#     print('-----------------------------------------------------------------')
-#     print("loading file: '" + sim_experiment_file.split("\\")[-1] + "'")
-#     loading_start_time = time.time()
-#     experiment_dict = pickle.load(open(sim_experiment_file, "rb" ), encoding='latin1')
-    
-#     # gather params
-#     num_simulations = len(experiment_dict['Results']['listOfSingleSimulationDicts'])
-#     num_segments    = len(experiment_dict['Params']['allSegmentsType'])
-#     sim_duration_ms = experiment_dict['Params']['totalSimDurationInSec'] * 1000
-#     num_ex_synapses  = num_segments
-#     num_inh_synapses = num_segments
-#     num_synapses = num_ex_synapses + num_inh_synapses
-    
-#     # collect X, y_spike, y_soma
-#     X = np.zeros((num_synapses,sim_duration_ms,num_simulations), dtype='bool')
-#     y_spike = np.zeros((sim_duration_ms,num_simulations))
-#     y_soma  = np.zeros((sim_duration_ms,num_simulations))
-#     for k, sim_dict in enumerate(experiment_dict['Results']['listOfSingleSimulationDicts']):
-#         X_ex  = dict2bin(sim_dict['exInputSpikeTimes'], num_segments, sim_duration_ms)
-#         X_inh = dict2bin(sim_dict['inhInputSpikeTimes'], num_segments, sim_duration_ms)
-#         X[:,:,k] = np.vstack((X_ex,X_inh))
-#         spike_times = (sim_dict['outputSpikeTimes'].astype(float) - 0.5).astype(int)
-#         y_spike[spike_times,k] = 1.0
-#         y_soma[:,k] = sim_dict['somaVoltageLowRes']
-
-#     loading_duration_sec = time.time() - loading_start_time
-#     print('loading took %.3f seconds' %(loading_duration_sec))
-#     print('-----------------------------------------------------------------')
-
-#     return X, y_spike, y_soma
-
-
-def dict2bin(row_inds_spike_times_map, num_segments, sim_duration_ms, syn_type):
-    
-    # 在循环开始前对字典的key进行批量操作
-    # if syn_type == 'exc':
-    if num_segments == 640:
-        # 对兴奋性突触字典，将所有key减1（从1-639变为0-638）
-        adjusted_dict = {}
-        for key, value in row_inds_spike_times_map.items():
-            adjusted_dict[key - 1] = value
-        row_inds_spike_times_map = adjusted_dict
-    # 对于inh类型，不需要修改key
-
-    bin_spikes_matrix = np.zeros((num_segments, sim_duration_ms), dtype='bool')            
-    for row_ind in row_inds_spike_times_map.keys():
-        for spike_time in row_inds_spike_times_map[row_ind]:
-            bin_spikes_matrix[row_ind,spike_time] = 1.0
-    
-    return bin_spikes_matrix
-
-
-def parse_sim_experiment_file(sim_experiment_file):
-    
-    print('-----------------------------------------------------------------')
-    print("loading file: '" + sim_experiment_file.split("\\")[-1] + "'")
-    loading_start_time = time.time()
-    experiment_dict = pickle.load(open(sim_experiment_file, "rb" ), encoding='latin1')
-    
-    # gather params（兼容original与SJC）
-    num_simulations = len(experiment_dict['Results']['listOfSingleSimulationDicts'])
-
-    # 优先用Params里的总时长；若无，则从第一条模拟的电压长度推断
-    if 'totalSimDurationInSec' in experiment_dict.get('Params', {}):
-        sim_duration_ms = int(experiment_dict['Params']['totalSimDurationInSec'] * 1000)
-    elif 'STIM DURATION' in experiment_dict.get('Params', {}):
-        sim_duration_ms = int(experiment_dict['Params']['STIM DURATION'] - 100)
-    else:
-        first_sim = experiment_dict['Results']['listOfSingleSimulationDicts'][0]
-        sim_duration_ms = len(first_sim['somaVoltageLowRes'])
-    
-    # 提取段数：original可从allSegmentsType得到；SJC按ex/inh字典长度
-    params = experiment_dict.get('Params', {})
-    if 'allSegmentsType' in params:
-        num_segments_exc = len(params['allSegmentsType'])
-        num_segments_inh = len(params['allSegmentsType'])
-    else:
-        first_sim = experiment_dict['Results']['listOfSingleSimulationDicts'][0]
-        num_segments_exc = len(first_sim['exInputSpikeTimes'])
-        num_segments_inh = len(first_sim['inhInputSpikeTimes'])
-    num_synapses = num_segments_exc + num_segments_inh
-    
-    # collect X, y_spike, y_soma
-    X = np.zeros((num_synapses, sim_duration_ms, num_simulations), dtype='bool')
-    y_spike = np.zeros((sim_duration_ms, num_simulations))
-    y_soma  = np.zeros((sim_duration_ms, num_simulations))
-    for k, sim_dict in enumerate(experiment_dict['Results']['listOfSingleSimulationDicts']):
-        X_ex  = dict2bin(sim_dict['exInputSpikeTimes'],  num_segments_exc, sim_duration_ms, syn_type='exc')
-        X_inh = dict2bin(sim_dict['inhInputSpikeTimes'], num_segments_inh, sim_duration_ms, syn_type='inh')
-        X[:, :, k] = np.vstack((X_ex, X_inh))
-        spike_times = (sim_dict['outputSpikeTimes'].astype(float) - 0.5).astype(int)
-        spike_times = spike_times[(spike_times >= 0) & (spike_times < sim_duration_ms)]
-        y_spike[spike_times, k] = 1.0
-        y_soma[:, k] = sim_dict['somaVoltageLowRes'][:sim_duration_ms]
-
-    loading_duration_sec = time.time() - loading_start_time
-    print('loading took %.3f seconds' %(loading_duration_sec))
-    print('-----------------------------------------------------------------')
-
-    return X, y_spike, y_soma
 
 
 def parse_multiple_sim_experiment_files(sim_experiment_files):
@@ -275,9 +192,7 @@ def filter_and_exctract_key_results(y_spikes_GT, y_spikes_hat, y_soma_GT, y_soma
 
 
 def plot_summary_panels(fpr, tpr, desired_fp_ind, y_spikes_GT_to_eval, y_spikes_hat_to_eval, y_soma_GT_to_eval, y_soma_hat_to_eval, desired_threshold, save_path='summary_panels.png'):
-    import matplotlib.pyplot as plt
-    from mpl_toolkits.axes_grid1.inset_locator import inset_axes
-    import numpy as np
+    
 
     fig, axes = plt.subplots(1, 3, figsize=(12, 4))
 
@@ -349,84 +264,366 @@ def plot_summary_panels(fpr, tpr, desired_fp_ind, y_spikes_GT_to_eval, y_spikes_
         pass
     ax_scatter.set_xlabel('L5PC Model (mV)')
     ax_scatter.set_ylabel('ANN (mV)')
+    ax_scatter.set_xlim(-80, -57)
+    ax_scatter.set_ylim(-80, -57)
+
     ax_scatter.grid(False)
 
-    plt.tight_layout()
+    # plt.tight_layout()
     fig = plt.gcf()
-    try:
-        # 先绘制，避免renderer为None
-        fig.canvas.draw()
-        plt.savefig(save_path, dpi=300, bbox_inches='tight')
-    except Exception as e:
-        print(f'savefig tight failed ({e}), falling back to regular save')
-        try:
-            fig.canvas.draw()
-            plt.savefig(save_path, dpi=300)
-        except Exception as e2:
-            print(f'regular save also failed ({e2}). Removing inset and retrying...')
-            # 尝试移除所有inset artists后再次保存
-            try:
-                for ax in fig.axes:
-                    # 删除非主轴上的子Axes（inset）
-                    for child in list(ax.get_children()):
-                        try:
-                            from mpl_toolkits.axes_grid1.inset_locator import InsetPosition
-                            if hasattr(child, 'get_axes_locator') and isinstance(child.get_axes_locator(), InsetPosition):
-                                child.remove()
-                        except Exception:
-                            continue
-                fig.canvas.draw()
-                plt.savefig(save_path, dpi=300)
-            except Exception as e3:
-                print(f'final save failed: {e3}')
-    finally:
-        plt.close(fig)
+    
+    # 使用安全保存函数
+    safe_save_fig(fig, save_path, dpi=300, bbox_inches='tight')
+    plt.close(fig)
     print(f'summary panels saved to: {save_path}')
 
 
-def main(models_dir, data_dir, model_string='NMDA', model_size='large'):
-    # ## evel scrip params
-    # model_string = 'NMDA'
+def calculate_sample_specific_fpr(y_spikes_GT_sample, y_spikes_hat_sample, threshold):
+    """
+    计算单个样本的FPR和TPR
+    
+    Args:
+        y_spikes_GT_sample: 单个样本的真实spike (1D array)
+        y_spikes_hat_sample: 单个样本的预测spike概率 (1D array)
+        threshold: 阈值
+    
+    Returns:
+        dict: 包含FPR, TPR, 假阳性数量等信息
+    """
+    # 二值化预测
+    y_pred_binary = (y_spikes_hat_sample > threshold).astype(int)
+    
+    # 计算混淆矩阵元素
+    true_positives = np.sum((y_spikes_GT_sample == 1) & (y_pred_binary == 1))
+    false_positives = np.sum((y_spikes_GT_sample == 0) & (y_pred_binary == 1))
+    true_negatives = np.sum((y_spikes_GT_sample == 0) & (y_pred_binary == 0))
+    false_negatives = np.sum((y_spikes_GT_sample == 1) & (y_pred_binary == 0))
+    
+    # 计算FPR和TPR
+    fpr = false_positives / (false_positives + true_negatives) if (false_positives + true_negatives) > 0 else 0
+    tpr = true_positives / (true_positives + false_negatives) if (true_positives + false_negatives) > 0 else 0
+    
+    # 计算其他有用指标
+    precision = true_positives / (true_positives + false_positives) if (true_positives + false_positives) > 0 else 0
+    recall = tpr  # 等同于TPR
+    
+    return {
+        'fpr': fpr,
+        'tpr': tpr,
+        'precision': precision,
+        'recall': recall,
+        'false_positives': false_positives,
+        'true_positives': true_positives,
+        'false_negatives': false_negatives,
+        'true_negatives': true_negatives,
+        'total_spikes_gt': np.sum(y_spikes_GT_sample),
+        'total_spikes_pred': np.sum(y_pred_binary)
+    }
 
-    # # model_size = 'small'
-    # model_size = 'large'
-
-    # models_dir = './Models_TCN/Single_Neuron_InOut_SJC_funcgroup2_var2/models/NMDA_largeSpikeWeight/'
-    # data_dir   = './Models_TCN/Single_Neuron_InOut_SJC_funcgroup2_var2/data/'
-
-    if model_string == 'NMDA':
-        # valid_data_dir     = data_dir + 'L5PC_NMDA_valid/'
-        test_data_dir      = data_dir + 'L5PC_NMDA_test/'
-        # output_figures_dir = '/Reseach/Single_Neuron_InOut/figures/NMDA/'
+def find_optimal_threshold_for_sample(y_spikes_GT_sample, y_spikes_hat_sample, target_fpr=0.002):
+    """
+    为单个样本找到最优阈值，使其FPR接近目标值
+    
+    Args:
+        y_spikes_GT_sample: 单个样本的真实spike
+        y_spikes_hat_sample: 单个样本的预测spike概率
+        target_fpr: 目标FPR
+    
+    Returns:
+        dict: 包含最优阈值和对应的指标
+    """
+    # 生成候选阈值
+    thresholds = np.linspace(0.01, 0.99, 100)
+    
+    best_threshold = None
+    best_fpr_diff = float('inf')
+    best_metrics = None
+    
+    for threshold in thresholds:
+        metrics = calculate_sample_specific_fpr(y_spikes_GT_sample, y_spikes_hat_sample, threshold)
+        fpr_diff = abs(metrics['fpr'] - target_fpr)
         
+        if fpr_diff < best_fpr_diff:
+            best_fpr_diff = fpr_diff
+            best_threshold = threshold
+            best_metrics = metrics
+    
+    return {
+        'optimal_threshold': best_threshold,
+        'metrics': best_metrics,
+        'fpr_difference': best_fpr_diff
+    }
+
+def visualization_with_sample_fpr(y_spikes_GT, y_spikes_hat, y_voltage_GT, y_voltage_hat, 
+                                         global_threshold, possible_presentable_candidates, output_dir, perfect_tpr_samples):
+    """
+    增强的可视化函数，显示每个样本的FPR信息
+    """
+    num_subplots = len(perfect_tpr_samples)
+    
+
+    for fig_idx in range(1):
+        selected_traces = possible_presentable_candidates[perfect_tpr_samples]
+        # selected_traces = possible_presentable_candidates[fig_idx*num_subplots:(fig_idx+1)*num_subplots]
+        
+        fig, axes = plt.subplots(nrows=num_subplots, ncols=1, figsize=(15, 10), sharex=True)
+        fig.subplots_adjust(left=0.05, right=0.95, bottom=0.05, top=0.95, wspace=0.01, hspace=0.3)
+        
+        for k, selected_trace in enumerate(selected_traces):
+            ax = axes[k]
+            
+            # 提取单个样本数据
+            spike_trace_GT = y_spikes_GT[selected_trace, :]
+            spike_trace_hat = y_spikes_hat[selected_trace, :]
+            voltage_trace_GT = y_voltage_GT[selected_trace, :]
+            voltage_trace_hat = y_voltage_hat[selected_trace, :]
+            
+            # 使用全局阈值
+            spike_trace_pred_global = spike_trace_hat > global_threshold
+            
+            # 计算该样本的FPR指标
+            global_metrics = calculate_sample_specific_fpr(spike_trace_GT, spike_trace_hat, global_threshold)
+            
+            # 寻找该样本的最优阈值
+            optimal_result = find_optimal_threshold_for_sample(spike_trace_GT, spike_trace_hat, target_fpr=0.002)
+            spike_trace_pred_optimal = spike_trace_hat > optimal_result['optimal_threshold']
+            optimal_metrics = optimal_result['metrics']
+            
+            # 获取spike时间点
+            output_spike_times_in_ms_GT = np.nonzero(spike_trace_GT)[0]
+            output_spike_times_in_ms_pred_global = np.nonzero(spike_trace_pred_global)[0]
+            output_spike_times_in_ms_pred_optimal = np.nonzero(spike_trace_pred_optimal)[0]
+            
+            # 准备电压轨迹（在spike时刻设置为40mV）
+            voltage_trace_GT_plot = voltage_trace_GT.copy()
+            voltage_trace_hat_plot = voltage_trace_hat.copy()
+            voltage_trace_hat_plot[output_spike_times_in_ms_pred_global] = 40
+            
+            # 时间轴
+            sim_duration_ms = spike_trace_GT.shape[0]
+            sim_duration_sec = int(sim_duration_ms / 1000.0)
+            time_in_sec = np.arange(sim_duration_ms) / 1000.0
+            
+            # 绘制电压轨迹
+            ax.plot(time_in_sec, voltage_trace_GT_plot, c='c', linewidth=1.5, label='Ground Truth')
+            ax.plot(time_in_sec, voltage_trace_hat_plot, c='m', linestyle=':', linewidth=1.5, label='Prediction')
+            
+            # 标记真实spike
+            if len(output_spike_times_in_ms_GT) > 0:
+                ax.scatter(output_spike_times_in_ms_GT/1000.0, 
+                          np.full(len(output_spike_times_in_ms_GT), 40), 
+                          c='blue', marker='|', s=100, label='GT Spikes')
+            
+            # 标记预测spike（全局阈值）
+            if len(output_spike_times_in_ms_pred_global) > 0:
+                ax.scatter(output_spike_times_in_ms_pred_global/1000.0, 
+                          np.full(len(output_spike_times_in_ms_pred_global), 35), 
+                          c='red', marker='|', s=100, label='Pred Spikes (Global)')
+            
+            # 标记预测spike（最优阈值）
+            if len(output_spike_times_in_ms_pred_optimal) > 0:
+                ax.scatter(output_spike_times_in_ms_pred_optimal/1000.0, 
+                          np.full(len(output_spike_times_in_ms_pred_optimal), 30), 
+                          c='orange', marker='|', s=100, label='Pred Spikes (Optimal)')
+            
+            # 设置坐标轴
+            ax.set_xlim(0.02, sim_duration_sec)
+            ax.set_ylim(-80, 45)
+            ax.set_ylabel('$V_m$ (mV)', fontsize=12)
+            
+            # 添加FPR信息到标题
+            title_text = (f'Sim {selected_trace}: Global FPR={global_metrics["fpr"]:.4f}, '
+                         f'Optimal FPR={optimal_metrics["fpr"]:.4f}, '
+                         f'FP={global_metrics["false_positives"]}, '
+                         f'TP={global_metrics["true_positives"]}')
+            ax.set_title(title_text, fontsize=10)
+            
+            # 设置图例（只在第一个子图显示）
+            if k == 0:
+                ax.legend(loc='upper right', fontsize=8)
+            
+            # 隐藏除最后一个子图外的x轴标签
+            if k < num_subplots - 1:
+                plt.setp(ax.get_xticklabels(), visible=False)
+        
+        # 设置x轴标签
+        axes[-1].set_xlabel('Time (s)', fontsize=12)
+        
+        # 保存图像
+        fig = plt.gcf()
+        save_path = f'{output_dir}/%d.png' % fig_idx
+        safe_save_fig(fig, save_path, dpi=300, bbox_inches='tight')
+        plt.close()
+
+def analyze_fpr_distribution(y_spikes_GT, y_spikes_hat, global_threshold, target_fpr=0.002):
+    """
+    分析所有样本的FPR分布，打印每个样本的详细信息
+    """
+    sample_fprs = []
+    sample_metrics = []
+    sample_tprs = []  # 新增：保存所有样本的TPR值
+    
+    print(f"\n=== 详细FPR分析 ===")
+    print(f"全局阈值: {global_threshold:.6f}")
+    print(f"目标FPR: {target_fpr:.4f}")
+    print(f"样本总数: {y_spikes_GT.shape[0]}")
+    print(f"每个样本时长: {y_spikes_GT.shape[1]} ms")
+    print("-" * 200)
+    print(f"{'ID':<3} {'FP':<2} {'FPR':<5} {'TP':<2} {'TPR':<5} | {'ID':<3} {'FP':<2} {'FPR':<5} {'TP':<2} {'TPR':<5} | {'ID':<3} {'FP':<2} {'FPR':<5} {'TP':<2} {'TPR':<5} | {'ID':<3} {'FP':<2} {'FPR':<5} {'TP':<2} {'TPR':<5}")
+    print("-" * 200)
+    
+    for i in range(0, y_spikes_GT.shape[0], 4):
+        # 计算四个样本的指标
+        metrics_list = []
+        for j in range(4):
+            if i + j < y_spikes_GT.shape[0]:
+                metrics = calculate_sample_specific_fpr(y_spikes_GT[i+j, :], y_spikes_hat[i+j, :], global_threshold)
+                sample_fprs.append(metrics['fpr'])
+                sample_metrics.append(metrics)
+                
+                # 计算并保存TPR值
+                if metrics['true_positives'] == 0:
+                    tpr_value = 0.0
+                else:
+                    tpr_value = metrics['true_positives'] / metrics['total_spikes_gt'] if metrics['total_spikes_gt'] > 0 else 0.0
+                sample_tprs.append(tpr_value)
+                
+                metrics_list.append((i+j, metrics, tpr_value))
+            else:
+                metrics_list.append(None)
+        
+        # 打印一行四个样本
+        line_parts = []
+        for j in range(4):
+            if metrics_list[j] is not None:
+                sample_id, metrics, tpr_value = metrics_list[j]
+                line_parts.append(f"{sample_id:<3} {metrics['false_positives']:<2} {metrics['fpr']:<5.3f} {metrics['true_positives']:<2} {100*tpr_value:<5.1f}%")
+            else:
+                line_parts.append("")
+        
+        print(" | ".join(line_parts))
+    
+    sample_fprs = np.array(sample_fprs)
+    
+    print("-" * 80)
+    print(f"\n=== FPR统计汇总 ===")
+    print(f"样本FPR统计:")
+    print(f"  均值: {np.mean(sample_fprs):.4f}")
+    print(f"  中位数: {np.median(sample_fprs):.4f}")
+    print(f"  标准差: {np.std(sample_fprs):.4f}")
+    print(f"  最小值: {np.min(sample_fprs):.4f}")
+    print(f"  最大值: {np.max(sample_fprs):.4f}")
+    print(f"  25%分位数: {np.percentile(sample_fprs, 25):.4f}")
+    print(f"  75%分位数: {np.percentile(sample_fprs, 75):.4f}")
+    
+    # 与目标FPR对比
+    mean_fpr = np.mean(sample_fprs)
+    fpr_difference = abs(mean_fpr - target_fpr)
+    print(f"\n=== 与目标FPR对比 ===")
+    print(f"目标FPR: {target_fpr:.4f}")
+    print(f"实际平均FPR: {mean_fpr:.4f}")
+    print(f"差异: {fpr_difference:.4f}")
+    print(f"相对误差: {(fpr_difference/target_fpr)*100:.2f}%")
+    
+    # 找出FPR异常高的样本
+    high_fpr_threshold = np.percentile(sample_fprs, 90)  # 90%分位数
+    high_fpr_samples = np.where(sample_fprs > high_fpr_threshold)[0]
+    
+    print(f"\n高FPR样本 (>{high_fpr_threshold:.4f}): {len(high_fpr_samples)}个")
+    for sample_idx in high_fpr_samples[:10]:  # 显示前10个
+        metrics = sample_metrics[sample_idx]
+        duration_sec = y_spikes_GT.shape[1] / 1000.0
+        fpr_rate = metrics['false_positives'] / duration_sec
+        print(f"  样本 {sample_idx}: FPR={metrics['fpr']:.4f}, FP={metrics['false_positives']}, TP={metrics['true_positives']}, FPR率={fpr_rate:.2f}/s")
+    
+    # 找出TPR为100%的样本（使用已计算的TPR值）
+    sample_tprs = np.array(sample_tprs)
+    perfect_tpr_samples = np.where(abs(sample_tprs - 1.0) < 1e-6)[0].tolist()  # TPR = 100% (考虑浮点数精度)
+    
+    print(f"\n=== TPR为100%的样本 ===")
+    print(f"完美TPR样本数量: {len(perfect_tpr_samples)}个")
+    if len(perfect_tpr_samples) > 0:
+        print(f"样本ID列表: {perfect_tpr_samples}")
+        # 显示前10个完美TPR样本的详细信息
+        for sample_idx in perfect_tpr_samples[:10]:
+            metrics = sample_metrics[sample_idx]
+            duration_sec = y_spikes_GT.shape[1] / 1000.0
+            fpr_rate = metrics['false_positives'] / duration_sec
+            print(f"  样本 {sample_idx}: FPR={metrics['fpr']:.4f}, FP={metrics['false_positives']}, TP={metrics['true_positives']}, GT_spikes={metrics['total_spikes_gt']}, FPR率={fpr_rate:.2f}/s")
+    else:
+        print("没有找到TPR为100%的样本")
+    
+    return sample_fprs, sample_metrics, perfect_tpr_samples
+
+
+def build_dataset_identifier(model_dir, model_size, desired_false_positive_rate):
+    """
+    动态构建dataset identifier
+    """
+    # 将路径按/分割
+    path_parts = model_dir.split('/')
+    
+    # 找到包含'InOut'的部分的索引
+    inout_index = None
+    for i, part in enumerate(path_parts):
+        if 'InOut' in part:
+            inout_index = i
+            break
+    
+    if inout_index is not None:
+        # 提取'InOut'之后到下一个'/'前的内容
+        inout_part = path_parts[inout_index]
+        if 'InOut' in inout_part:
+            # 获取'InOut'后的部分，去掉开头的下划线
+            inout_suffix = inout_part.split('InOut')[-1]
+            if inout_suffix.startswith('_'):
+                inout_suffix = inout_suffix[1:]
+        else:
+            inout_suffix = inout_part
+    else:
+        inout_suffix = 'original'
+    
+    # 找到包含模型策略的部分（通常是倒数第3个部分）
+    # 路径结构：.../models/AMPA_fullStrategy/depth_7_filters_256_window_400/
+    if len(path_parts) >= 3:
+        model_strategy_part = path_parts[-3]  # 倒数第3个部分
+    else:
+        model_strategy_part = path_parts[-1]
+    
+    # 从模型策略部分提取下划线后的内容
+    if '_' in model_strategy_part:
+        strategy_part = model_strategy_part.split('_', 1)[1]  # 获取第一个下划线后的部分
+    else:
+        strategy_part = model_strategy_part
+    
+    # 组合成base identifier
+    base_identifier = f"{inout_suffix}_{strategy_part}"
+    
+    # 组合最终的dataset identifier
+    dataset_identifier = f'{base_identifier}_{model_size}_fpr{desired_false_positive_rate}'
+    return dataset_identifier
+
+
+def main(models_dir, data_dir, model_string='NMDA', model_size='large'):
+    if model_string == 'NMDA':
+        test_data_dir      = data_dir + 'L5PC_NMDA_test/'
         if model_size == 'small':
-            model_dir = models_dir + 'depth_3_filters_256_window_400/' #  '/NMDA_FCN__DxWxT_1x128x43/'
-            # NN_illustration_filename = '/Models_TCN/Single_Neuron_InOut/figures/NN_Illustrations/TCN_3_layer.png'
+            model_dir = models_dir + 'depth_3_filters_256_window_400/' 
         elif model_size == 'large':
-            model_dir = models_dir + 'depth_7_filters_256_window_400/' #  '/NMDA_TCN__DxWxT_7x128x153/'
-            # NN_illustration_filename = '/Models_TCN/Single_Neuron_InOut/figures/NN_Illustrations/TCN_3_layers.png'
+            model_dir = models_dir + 'depth_7_filters_256_window_400/' 
+    elif model_string == 'AMPA':
+        test_data_dir      = data_dir + 'L5PC_AMPA_test/'
+        if model_size == 'small':
+            model_dir = models_dir + 'depth_1_filters_128_window_400/' 
+        elif model_size == 'large':
+            model_dir = models_dir + 'depth_7_filters_256_window_400/' 
 
     desired_false_positive_rate = 0.002
 
-    # 使用字符串连接和in操作符一次性判断所有条件
-    path_str = '/'.join(model_dir.split('/'))
-    dataset_identifier = f'original_fpr{desired_false_positive_rate}'
-    
-    # 按优先级顺序检查条件
-    if 'SJC_funcgroup2_var2' in path_str and 'fullStrategy' in path_str:
-        dataset_identifier = f'SJC_funcgroup2_var2_fullStrategy_fpr{desired_false_positive_rate}'
-    elif 'SJC_funcgroup2_var2' in path_str:
-        dataset_identifier = f'SJC_funcgroup2_var2_fpr{desired_false_positive_rate}'
-    elif 'largeSpikeWeight' in path_str:
-        dataset_identifier = f'SJC_funcgroup2_var2_largeSpikeWeight_fpr{desired_false_positive_rate}'
-    elif 'SJC_funcgroup2' in path_str:
-        dataset_identifier = f'SJC_funcgroup2_fpr{desired_false_positive_rate}'
-    elif 'SJC' in path_str:
-        dataset_identifier = f'SJC_fpr{desired_false_positive_rate}'
-    elif 'fullStrategy' in path_str:
-        dataset_identifier = f'original_fullStrategy_fpr{desired_false_positive_rate}'
+    # 动态构建dataset identifier
+    dataset_identifier = build_dataset_identifier(model_dir, model_size, desired_false_positive_rate)
 
-    output_dir = f"./results/main_figure_replication/{dataset_identifier}"
+    output_dir = f"./results/5_main_figure_replication/{dataset_identifier}"
     os.makedirs(output_dir, exist_ok=True)
     
     print('-----------------------------------------------')
@@ -456,7 +653,7 @@ def main(models_dir, data_dir, model_string='NMDA', model_size='large'):
     print('loading testing files...')
     test_file_loading_start_time = time.time()
 
-    v_threshold = -60
+    v_threshold = -55
 
     # load test data
     X_test, y_spike_test, y_soma_test  = parse_multiple_sim_experiment_files(test_files)
@@ -538,7 +735,6 @@ def main(models_dir, data_dir, model_string='NMDA', model_size='large'):
             y1_test_for_TCN_hat[:,t0:end_time_ind,:] = curr_y1_test_for_TCN[:,overlap_size:,:]
             y2_test_for_TCN_hat[:,t0:end_time_ind,:] = curr_y2_test_for_TCN[:,overlap_size:,:]
 
-
     # zero score the prediction and align it with the actual test
     s_dst = y2_test_for_TCN.std()
     m_dst = y2_test_for_TCN.mean()
@@ -591,73 +787,87 @@ def main(models_dir, data_dir, model_string='NMDA', model_size='large'):
 
     desired_threshold = thresholds[desired_fp_ind]
     print('desired_threshold = %.10f' %(desired_threshold))
+    
+    # 分析FPR分布
+    sample_fprs, sample_metrics, perfect_tpr_samples = analyze_fpr_distribution(
+        y_spikes_GT_to_eval, y_spikes_hat_to_eval, desired_threshold, target_fpr=desired_false_positive_rate
+    )
+    
     # 生成三个子图的figure（ROC/互相关/电压散点）
     plot_summary_panels(
         fpr, tpr, desired_fp_ind,
         y_spikes_GT_to_eval, y_spikes_hat_to_eval,
-        y_soma_GT_to_eval, y_soma_hat_to_eval,
-        desired_threshold,
-        save_path=f'{output_dir}/summary_panels_%s.png' %(dataset_identifier)
+        y_soma_GT_to_eval + y_train_soma_bias, y_soma_hat_to_eval + y_train_soma_bias, desired_threshold,
+        save_path=f'{output_dir}/summary_panels.png'
     )
-    # ------------------------------------------------------------ #
-
-    xytick_labels_fontsize = 18
-    title_fontsize = 29
+    # ------------------------------------------------------------ #  
     xylabels_fontsize = 22
-    legend_fontsize = 18
-
     num_subplots = 5
     for fig_idx in range(5):
         num_spikes_per_simulation = y1_test_for_TCN.sum(axis=1)[:,0]
-        possible_presentable_candidates = np.nonzero(np.logical_and(num_spikes_per_simulation >= 3, num_spikes_per_simulation <= 15))[0]
+        if model_string == 'NMDA':
+            possible_presentable_candidates = np.nonzero(np.logical_and(num_spikes_per_simulation >= 3, num_spikes_per_simulation <= 15))[0]
+        elif model_string == 'AMPA':
+            possible_presentable_candidates = np.nonzero(np.logical_and(num_spikes_per_simulation >= 0, num_spikes_per_simulation <= 15))[0]
         # selected_traces = np.random.choice(possible_presentable_candidates, size=num_subplots)
-        selected_traces = possible_presentable_candidates[fig_idx*num_subplots:(fig_idx+1)*num_subplots]
+        # selected_traces = possible_presentable_candidates[fig_idx*num_subplots:(fig_idx+1)*num_subplots]
 
-        fig, ax = plt.subplots(nrows=num_subplots, ncols=1, figsize=(12, 8), sharex=True)
-        fig.subplots_adjust(left=0.05, right=0.95, bottom=0.05, top=0.95, wspace=0.01, hspace=0.01)
 
-        for k, selected_trace in enumerate(selected_traces):
+    visualization_with_sample_fpr(
+        y_spikes_GT_to_eval, y_spikes_hat_to_eval,
+        y_soma_GT_to_eval + y_train_soma_bias, 
+        y_soma_hat_to_eval + y_train_soma_bias,
+        desired_threshold, possible_presentable_candidates, output_dir, perfect_tpr_samples
+    )
+
+        # fig, ax = plt.subplots(nrows=num_subplots, ncols=1, figsize=(12, 8), sharex=True)
+        # fig.subplots_adjust(left=0.05, right=0.95, bottom=0.05, top=0.95, wspace=0.01, hspace=0.01)
+
+        # for k, selected_trace in enumerate(selected_traces):
             
-            spike_trace_GT   = y1_test_for_TCN[selected_trace,:,0]
-            spike_trace_pred = y1_test_for_TCN_hat[selected_trace,:,0] > desired_threshold
+        #     spike_trace_GT   = y1_test_for_TCN[selected_trace,:,0]
+        #     spike_trace_pred = y1_test_for_TCN_hat[selected_trace,:,0] > desired_threshold
             
-            output_spike_times_in_ms_GT   = np.nonzero(spike_trace_GT)[0]
-            output_spike_times_in_ms_pred = np.nonzero(spike_trace_pred)[0]
+        #     output_spike_times_in_ms_GT   = np.nonzero(spike_trace_GT)[0]
+        #     output_spike_times_in_ms_pred = np.nonzero(spike_trace_pred)[0]
             
-            soma_voltage_trace_GT   = y_soma_test_transposed[selected_trace,:]
-            # soma_voltage_trace_GT   = y2_test_for_TCN[selected_trace,:,0] + y_train_soma_bias
-            soma_voltage_trace_pred = y2_test_for_TCN_hat[selected_trace,:,0] + y_train_soma_bias
+        #     soma_voltage_trace_GT   = y_soma_test_transposed[selected_trace,:]
+        #     # soma_voltage_trace_GT   = y2_test_for_TCN[selected_trace,:,0] + y_train_soma_bias
+        #     soma_voltage_trace_pred = y2_test_for_TCN_hat[selected_trace,:,0] + y_train_soma_bias
             
-            # soma_voltage_trace_GT[output_spike_times_in_ms_GT] = 40
-            soma_voltage_trace_pred[output_spike_times_in_ms_pred] = 40
+        #     # soma_voltage_trace_GT[output_spike_times_in_ms_GT] = 40
+        #     soma_voltage_trace_pred[output_spike_times_in_ms_pred] = 40
                 
-            sim_duration_ms = spike_trace_GT.shape[0]
-            sim_duration_sec = int(sim_duration_ms / 1000.0)
-            # zoomout_scalebar_xloc = 0.95 * sim_duration_sec
-            time_in_sec = np.arange(sim_duration_ms) / 1000.0
+        #     sim_duration_ms = spike_trace_GT.shape[0]
+        #     sim_duration_sec = int(sim_duration_ms / 1000.0)
+        #     # zoomout_scalebar_xloc = 0.95 * sim_duration_sec
+        #     time_in_sec = np.arange(sim_duration_ms) / 1000.0
 
-            # ax[k].axis('off')  # 移除或注释掉这一行
-            ax[k].spines['top'].set_visible(False)
-            ax[k].spines['right'].set_visible(False)
-            ax[k].spines['bottom'].set_visible(True)  # 确保底部可见
-            ax[k].spines['left'].set_visible(True)    # 确保左侧可见
-            if k < num_subplots - 1:  # 隐藏除最底部子图外的所有 x 轴标签
-                plt.setp(ax[k].get_xticklabels(), visible=False)
-            ax[k].plot(time_in_sec,soma_voltage_trace_GT,c='c')
-            ax[k].plot(time_in_sec,soma_voltage_trace_pred,c='m',linestyle=':')
-            ax[k].set_xlim(0.02,sim_duration_sec)
-            ax[k].set_ylabel('$V_m$ (mV)', fontsize=xylabels_fontsize)
-            ax[-1].set_xlabel('Time (s)', fontsize=xylabels_fontsize)
-
-            
-        plt.savefig(f'{output_dir}/main_figure_replication_%d_%s.png' %(fig_idx, dataset_identifier), dpi=300, bbox_inches='tight')
+        #     # ax[k].axis('off')  # 移除或注释掉这一行
+        #     ax[k].spines['top'].set_visible(False)
+        #     ax[k].spines['right'].set_visible(False)
+        #     ax[k].spines['bottom'].set_visible(True)  # 确保底部可见
+        #     ax[k].spines['left'].set_visible(True)    # 确保左侧可见
+        #     if k < num_subplots - 1:  # 隐藏除最底部子图外的所有 x 轴标签
+        #         plt.setp(ax[k].get_xticklabels(), visible=False)
+        #     ax[k].plot(time_in_sec,soma_voltage_trace_GT,c='c')
+        #     ax[k].plot(time_in_sec,soma_voltage_trace_pred,c='m',linestyle=':')
+        #     ax[k].set_xlim(0.02,sim_duration_sec)
+        #     ax[k].set_ylim(-80, 40)
+        #     ax[k].set_ylabel('$V_m$ (mV)', fontsize=xylabels_fontsize)
+        #     ax[-1].set_xlabel('Time (s)', fontsize=xylabels_fontsize)
+ 
+        # plt.savefig(f'{output_dir}/main_figure_replication_%d_%s.png' %(fig_idx, dataset_identifier), dpi=300, bbox_inches='tight')
 
 
 if __name__ == "__main__":
 
-    models_dir = '/G/results/aim2_sjc/Models_TCN/Single_Neuron_InOut_SJC_funcgroup2_var2/models/NMDA_fullStrategy/'
-    data_dir   = '/G/results/aim2_sjc/Models_TCN/Single_Neuron_InOut_SJC_funcgroup2_var2/data/'
+    # models_dir = '/G/results/aim2_sjc/Models_TCN/Single_Neuron_InOut/models/NMDA_fullStrategy/'
+    # data_dir   = '/G/results/aim2_sjc/Models_TCN/Single_Neuron_InOut/data/'
     
-    main(models_dir, data_dir)
+    models_dir = '/G/results/aim2_sjc/Models_TCN/Single_Neuron_InOut_SJC_funcgroup2_var2_AMPA/models/AMPA_fullStrategy/'
+    data_dir   = '/G/results/aim2_sjc/Models_TCN/Single_Neuron_InOut_SJC_funcgroup2_var2_AMPA/data/'
+    
+    main(models_dir, data_dir, 'AMPA', 'large')
 
 

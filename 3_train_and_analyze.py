@@ -295,28 +295,28 @@ def train_and_save(network_depth, num_filters_per_layer, input_window_size, num_
 
     batch_size_per_epoch        = [8] * num_epochs   # 16 # 减少批次大小从32到16
     learning_rate_per_epoch     = [0.0001] * len(batch_size_per_epoch)
-    loss_weights_per_epoch      = [[1.0, 0.0200]] * num_epochs # Even higher spike weight
+    loss_weights_per_epoch      = [[1.0, 0.01]] * num_epochs # [[1.0, 0.0200]] * num_epochs # Even higher spike weight
     num_train_steps_per_epoch   = [100] * num_epochs  # 减少训练步数
 
     for i in range(40,num_epochs):
         batch_size_per_epoch[i]    = 8
         learning_rate_per_epoch[i] = 0.00003
-        loss_weights_per_epoch[i]  = [2.0, 0.0100]
+        loss_weights_per_epoch[i]  = [2.0, 0.005] # [2.0, 0.0100]
         
     for i in range(80,num_epochs):
         batch_size_per_epoch[i]    = 8
         learning_rate_per_epoch[i] = 0.00001
-        loss_weights_per_epoch[i]  = [4.0, 0.0100]
+        loss_weights_per_epoch[i]  = [3.0, 0.002] # [4.0, 0.0100]
 
     for i in range(120,num_epochs):
         batch_size_per_epoch[i]    = 8
         learning_rate_per_epoch[i] = 0.000003
-        loss_weights_per_epoch[i]  = [8.0, 0.0100]
+        loss_weights_per_epoch[i]  = [4.0, 0.001] # [8.0, 0.0100]
 
     for i in range(160,num_epochs):
         batch_size_per_epoch[i]    = 8
         learning_rate_per_epoch[i] = 0.000001
-        loss_weights_per_epoch[i]  = [9.0, 0.0030]
+        loss_weights_per_epoch[i]  = [5.0, 0.001] # [9.0, 0.0030]
 
     learning_schedule_dict = {}
     learning_schedule_dict['train_file_load']           = train_file_load
@@ -616,8 +616,8 @@ def main():
     print("==================\n")
 
     # 1. 定义超参数网格
-    network_depth_list = [7]
-    num_filters_per_layer_list = [256]  # 其它参数可固定或自行调整
+    network_depth_list = [1]
+    num_filters_per_layer_list = [128]  # 其它参数可固定或自行调整
     input_window_size_list = [400]  # 这里遍历不同的input_window_size
 
     num_epochs = 250
@@ -626,7 +626,7 @@ def main():
 
     # 配置改进选项
     use_improved_initialization = False   # 设置为True启用改进的初始化策略
-    use_improved_sampling = False         # 设置为True启用改进的数据采样策略
+    use_improved_sampling = True        # 设置为True启用改进的数据采样策略
     spike_rich_ratio = 0.6              # 60%的样本包含spike
     
     print(f"\n=== 改进配置 ===")
@@ -636,14 +636,41 @@ def main():
         print(f"Spike-rich样本比例: {spike_rich_ratio * 100:.0f}%")
     print(f"================\n")
 
+    def build_analysis_suffix(base_path, model_suffix):
+        """
+        动态构建analysis suffix
+        从base path中提取'InOut'后的部分，从model suffix中提取下划线后的部分
+        """
+        # 从base path中提取'InOut'后的部分
+        if 'InOut' in base_path:
+            inout_part = base_path.split('InOut')[-1]  # 获取'InOut'后的部分
+            # 如果结果以下划线开头，去掉开头的下划线
+            if inout_part.startswith('_'):
+                inout_part = inout_part[1:]
+        else:
+            inout_part = 'original' # base_path.split('/')[-1]  # 如果没有'InOut'，取最后一部分
+        
+        # 从model suffix中提取下划线后的部分
+        if '_' in model_suffix:
+            model_part = model_suffix.split('_', 1)[1]  # 获取第一个下划线后的部分
+        else:
+            model_part = model_suffix
+        
+        # 组合成analysis suffix
+        analysis_suffix = f"{inout_part}_{model_part}"
+        return analysis_suffix
+
     for network_depth, num_filters_per_layer, input_window_size in product(network_depth_list, num_filters_per_layer_list, input_window_size_list):
 
-        # 自动命名文件夹
-        base_path = '/G/results/aim2_sjc/Models_TCN/Single_Neuron_InOut_SJC_funcgroup2_var2'
-        data_suffix = 'L5PC_NMDA'
-        model_suffix = 'NMDA_fullStrategy_2'
-        analysis_suffix = 'SJC_funcgroup2_var2_fullStrategy_2'
+        # 基础配置
+        test_suffix = '_SJC_funcgroup2_var2_AMPA'
+        base_path = '/G/results/aim2_sjc/Models_TCN/Single_Neuron_InOut' + test_suffix
+        data_suffix = 'L5PC_AMPA'
+        model_suffix = 'AMPA_fullStrategy'
         
+        # 动态构建analysis suffix
+        analysis_suffix = build_analysis_suffix(base_path, model_suffix)
+    
         # 数据目录
         train_data_dir = f'{base_path}/data/{data_suffix}_train/'
         valid_data_dir = f'{base_path}/data/{data_suffix}_valid/'
@@ -651,7 +678,7 @@ def main():
         
         # 模型和分析目录
         model_dir = f'{base_path}/models/{model_suffix}/depth_{network_depth}_filters_{num_filters_per_layer}_window_{input_window_size}/'
-        analysis_dir = f'./results/model_analysis_plots/{analysis_suffix}/depth_{network_depth}_filters_{num_filters_per_layer}_window_{input_window_size}/'
+        analysis_dir = f'./results/3_model_analysis_plots/{analysis_suffix}/depth_{network_depth}_filters_{num_filters_per_layer}_window_{input_window_size}/'
         
         os.makedirs(model_dir, exist_ok=True)
         os.makedirs(analysis_dir, exist_ok=True)

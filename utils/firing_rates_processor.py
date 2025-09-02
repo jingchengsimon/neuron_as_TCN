@@ -1,10 +1,7 @@
 import numpy as np
-import tensorflow as tf
-import keras
 from keras.models import load_model
 import pickle
-import os
-from fit_CNN import parse_sim_experiment_file
+from utils.fit_CNN import parse_sim_experiment_file
 
 class FiringRatesProcessor:
     """
