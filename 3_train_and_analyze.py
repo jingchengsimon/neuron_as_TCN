@@ -6,14 +6,18 @@ import pickle
 from datetime import datetime  
 from itertools import product
 # from fit_CNN_pytorch import train_and_save_pytorch
-from utils.fit_CNN import create_temporaly_convolutional_model, SimulationDataGenerator
+from utils.fit_CNN_torch import create_temporaly_convolutional_model, SimulationDataGenerator
 from utils.model_analysis import (
     load_model_results, print_model_summary, 
     plot_training_curves, plot_model_comparison, analyze_training_stability, plot_auc_analysis
 )
-import tensorflow as tf
+# import tensorflow as tf
 from keras.optimizers import Nadam
 from keras.callbacks import LearningRateScheduler
+from tqdm import tqdm
+import torch
+import torch.nn as nn
+import torch.optim as optim
 
 # 添加GPU监控库
 try:
@@ -260,18 +264,18 @@ def train_and_save(network_depth, num_filters_per_layer, input_window_size, num_
                    use_improved_initialization=False, use_improved_sampling=False, spike_rich_ratio=0.5):
 
     # ========== GPU验证代码 - 添加在这里 ==========
-    import tensorflow as tf
-    print("Training device check:")
-    print("TensorFlow built with CUDA:", tf.test.is_built_with_cuda())
-    print("GPU devices:", tf.config.list_physical_devices('GPU'))
+    # import tensorflow as tf
+    # print("Training device check:")
+    # print("TensorFlow built with CUDA:", tf.test.is_built_with_cuda())
+    # print("GPU devices:", tf.config.list_physical_devices('GPU'))
     # ===========================================
 
-    use_multiprocessing = True  # 关闭多进程以避免内存问题
-    num_workers = 4  # 减少worker数量
+    # use_multiprocessing = True  # 关闭多进程以避免内存问题
+    # num_workers = 4  # 减少worker数量
 
-    print('------------------------------------------------------------------')
-    print('use_multiprocessing = %s, num_workers = %d' %(str(use_multiprocessing), num_workers))
-    print('------------------------------------------------------------------')
+    # print('------------------------------------------------------------------')
+    # print('use_multiprocessing = %s, num_workers = %d' %(str(use_multiprocessing), num_workers))
+    # print('------------------------------------------------------------------')
 
     # ------------------------------------------------------------------
     # basic configurations and directories
@@ -387,6 +391,12 @@ def train_and_save(network_depth, num_filters_per_layer, input_window_size, num_
                                                             strides_per_layer, dilation_rates_per_layer, initializer_per_layer,
                                                             use_improved_initialization=use_improved_initialization)
 
+    # 将模型移动到设备（CUDA优先）并创建损失函数
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    temporal_conv_net = temporal_conv_net.to(device)
+    spike_criterion = nn.BCELoss()
+    soma_criterion = nn.MSELoss()
+
     is_fully_connected = (network_depth == 1) or sum(filter_sizes_per_layer[1:]) == (network_depth -1)
     if is_fully_connected:
         model_prefix = '%s_FCN' %(synapse_type)
@@ -407,7 +417,7 @@ def train_and_save(network_depth, num_filters_per_layer, input_window_size, num_
     print('-----------------------------------------------')
 
     
-    num_learning_schedules = num_epochs # len(batch_size_per_epoch) # 8
+    num_learning_schedules = len(batch_size_per_epoch) # 1
 
     training_history_dict = {}
     for learning_schedule in range(start_learning_schedule, num_learning_schedules): # range(0, 8)
@@ -431,10 +441,15 @@ def train_and_save(network_depth, num_filters_per_layer, input_window_size, num_
     
         train_steps_per_epoch = len(train_data_generator)
         
-        # 优化器只初始化一次，学习率由callback动态调整
+        # 优化器只初始化一次；学习率在每个schedule设置
         if learning_schedule == 0:
-            optimizer_to_use = Nadam(lr=learning_rate)
-            temporal_conv_net.compile(optimizer=optimizer_to_use, loss=['binary_crossentropy','mse'], loss_weights=loss_weights)
+            try:
+                optimizer_to_use = optim.NAdam(temporal_conv_net.parameters(), lr=learning_rate)
+            except Exception:
+                optimizer_to_use = optim.Adam(temporal_conv_net.parameters(), lr=learning_rate)
+        else:
+            for g in optimizer_to_use.param_groups:
+                g['lr'] = learning_rate
         
         print('-----------------------------------------------')
         print('starting epoch %d:' %(learning_schedule))
@@ -460,14 +475,67 @@ def train_and_save(network_depth, num_filters_per_layer, input_window_size, num_
         # monitor_thread.daemon = True
         # monitor_thread.start()
 
-        lr_scheduler = LearningRateScheduler(lr_warmup_decay, verbose=1)
-        history = temporal_conv_net.fit_generator(generator=train_data_generator,
-                                                epochs=num_steps_multiplier,
-                                                validation_data=valid_data_generator,
-                                                use_multiprocessing=use_multiprocessing,  # 关闭多进程以确保进度条正常显示
-                                                workers=num_workers,  # 减少worker数量
-                                                verbose=1,  # 显示详细进度条
-                                                callbacks=[lr_scheduler])
+        # 使用PyTorch训练循环替代Keras fit_generator
+        train_epoch_spike_losses = []
+        train_epoch_soma_losses = []
+        val_epoch_spike_losses = []
+        val_epoch_soma_losses = []
+
+        for mini_epoch in range(num_steps_multiplier):
+            # 训练一个"小epoch"（与Keras中epochs=num_steps_multiplier对齐）
+            temporal_conv_net.train()
+            running_spike, running_soma, running_total = 0.0, 0.0, 0.0
+            for step in tqdm(range(train_steps_per_epoch), desc=f"Train {learning_schedule+1}/{num_epochs} e{mini_epoch+1}/{num_steps_multiplier}", leave=False):
+                X_batch, targets = train_data_generator[step]
+                y_spike_batch, y_soma_batch = targets
+                X_batch = X_batch.to(device)
+                y_spike_batch = y_spike_batch.to(device)
+                y_soma_batch = y_soma_batch.to(device)
+
+                optimizer_to_use.zero_grad()
+                pred_spike, pred_soma = temporal_conv_net(X_batch)
+
+                loss_spike = spike_criterion(pred_spike, y_spike_batch)
+                loss_soma = soma_criterion(pred_soma, y_soma_batch)
+                loss = loss_weights[0] * loss_spike + loss_weights[1] * loss_soma
+                loss.backward()
+                optimizer_to_use.step()
+
+                running_spike += loss_spike.item()
+                running_soma += loss_soma.item()
+                running_total += loss.item()
+
+            # 记录训练平均loss（对齐Keras每个epoch一条）
+            train_epoch_spike_losses.append(running_spike / train_steps_per_epoch)
+            train_epoch_soma_losses.append(running_soma / train_steps_per_epoch)
+
+            # 验证
+            temporal_conv_net.eval()
+            with torch.no_grad():
+                val_spike, val_soma = 0.0, 0.0
+                for vstep in tqdm(range(len(valid_data_generator)), desc="Valid", leave=False):
+                    Xb, targets_v = valid_data_generator[vstep]
+                    ysb, yvb = targets_v
+                    Xb = Xb.to(device)
+                    ysb = ysb.to(device)
+                    yvb = yvb.to(device)
+                    ps, pv = temporal_conv_net(Xb)
+                    val_spike += spike_criterion(ps, ysb).item()
+                    val_soma  += soma_criterion(pv, yvb).item()
+                val_epoch_spike_losses.append(val_spike / max(1, len(valid_data_generator)))
+                val_epoch_soma_losses.append(val_soma / max(1, len(valid_data_generator)))
+
+        # 构造与Keras history等价的结构用于后续统计
+        history = {
+            'history': {
+                'spikes_loss': train_epoch_spike_losses,
+                'somatic_loss': train_epoch_soma_losses,
+                'val_spikes_loss': val_epoch_spike_losses,
+                'val_somatic_loss': val_epoch_soma_losses,
+                'loss': [ws + wm for ws, wm in zip(train_epoch_spike_losses, train_epoch_soma_losses)],
+                'val_loss': [ws + wm for ws, wm in zip(val_epoch_spike_losses, val_epoch_soma_losses)],
+            }
+        }
 
         training_time = time.time() - start_time
         print(f"Training time: {training_time:.2f}s")
@@ -476,8 +544,8 @@ def train_and_save(network_depth, num_filters_per_layer, input_window_size, num_
         
         # store the loss values in training histogry dictionary and add some additional fields about the training schedule
         try:
-            for key in history.history.keys():
-                training_history_dict[key] += history.history[key]
+            for key in history['history'].keys():
+                training_history_dict[key] += history['history'][key]
             training_history_dict['learning_schedule'] += [learning_schedule] * num_steps_multiplier
             training_history_dict['batch_size']        += [batch_size] * num_steps_multiplier
             training_history_dict['learning_rate']     += [learning_rate] * num_steps_multiplier
@@ -488,8 +556,8 @@ def train_and_save(network_depth, num_filters_per_layer, input_window_size, num_
             training_history_dict['train_files_histogram'] += [train_data_generator.batches_per_file_dict]
             training_history_dict['valid_files_histogram'] += [valid_data_generator.batches_per_file_dict]
         except:
-            for key in history.history.keys():
-                training_history_dict[key] = history.history[key]
+            for key in history['history'].keys():
+                training_history_dict[key] = history['history'][key]
             training_history_dict['learning_schedule'] = [learning_schedule] * num_steps_multiplier
             training_history_dict['batch_size']        = [batch_size] * num_steps_multiplier
             training_history_dict['learning_rate']     = [learning_rate] * num_steps_multiplier
@@ -521,14 +589,15 @@ def train_and_save(network_depth, num_filters_per_layer, input_window_size, num_
                 
             results_overview = 'LogLoss_train_%d_valid_%d' %(train_MSE,valid_MSE)
             current_datetime = str(datetime.now())[:-10].replace(':','_').replace(' ','__')
-            model_filename    = models_dir + '%s__%s__%s__%s__%s__%s.h5' %(model_prefix,architecture_overview,current_datetime,train_string,results_overview,modelID_str)
+            model_filename    = models_dir + '%s__%s__%s__%s__%s__%s.pt' %(model_prefix,architecture_overview,current_datetime,train_string,results_overview,modelID_str)
             auxilary_filename = models_dir + '%s__%s__%s__%s__%s__%s.pickle' %(model_prefix,architecture_overview,current_datetime,train_string,results_overview,modelID_str)
 
             print('-----------------------------------------------------------------------------------------')
             print('finished epoch %d/%d. saving...\n     "%s"\n     "%s"' %(learning_schedule +1, num_epochs, model_filename.split('/')[-1], auxilary_filename.split('/')[-1]))
             print('-----------------------------------------------------------------------------------------')
 
-            temporal_conv_net.save(model_filename)
+            # 保存PyTorch模型参数
+            torch.save(temporal_conv_net.state_dict(), model_filename)
             
             # save all relevent training params (in raw and unprocessed way)
             model_hyperparams_and_training_dict = {}
@@ -584,27 +653,27 @@ def main():
     # ========== GPU配置代码 - 添加在这里 ==========
     
     # 检测GPU
-    print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
+    # print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
 
-    # 配置GPU内存自增长，避免显存不足
-    gpus = tf.config.list_physical_devices('GPU')
-    if gpus:
-        try:
-            for gpu in gpus:
-                tf.config.experimental.set_memory_growth(gpu, True)
-            print("GPU memory growth enabled")
-        except RuntimeError as e:
-            print(e)
+    # # 配置GPU内存自增长，避免显存不足
+    # gpus = tf.config.list_physical_devices('GPU')
+    # if gpus:
+    #     try:
+    #         for gpu in gpus:
+    #             tf.config.experimental.set_memory_growth(gpu, True)
+    #         print("GPU memory growth enabled")
+    #     except RuntimeError as e:
+    #         print(e)
 
     # 可选：指定使用特定GPU（如果有多块GPU）
     # os.environ["CUDA_VISIBLE_DEVICES"] = "0"  # 只使用第0号GPU
     # ===========================================
     
     # GPU状态诊断
-    print("\n=== GPU状态诊断 ===")
-    print(f"TensorFlow版本: {tf.__version__}")
-    print(f"CUDA可用: {tf.test.is_built_with_cuda()}")
-    print(f"GPU设备数量: {len(tf.config.list_physical_devices('GPU'))}")
+    # print("\n=== GPU状态诊断 ===")
+    # print(f"TensorFlow版本: {tf.__version__}")
+    # print(f"CUDA可用: {tf.test.is_built_with_cuda()}")
+    # print(f"GPU设备数量: {len(tf.config.list_physical_devices('GPU'))}")
     
     # 使用GPU监控类
     gpu_monitor = GPUMonitor()
@@ -616,11 +685,11 @@ def main():
     print("==================\n")
 
     # 1. 定义超参数网格
-    network_depth_list = [1]
-    num_filters_per_layer_list = [128]  # 其它参数可固定或自行调整
+    network_depth_list = [7]
+    num_filters_per_layer_list = [256]  # 其它参数可固定或自行调整
     input_window_size_list = [400]  # 这里遍历不同的input_window_size
 
-    num_epochs = 250
+    num_epochs = 10
 
     # 2. 主控循环
 
@@ -663,10 +732,10 @@ def main():
     for network_depth, num_filters_per_layer, input_window_size in product(network_depth_list, num_filters_per_layer_list, input_window_size_list):
 
         # 基础配置
-        test_suffix = '_SJC_funcgroup2_var2_AMPA'
+        test_suffix = '_SJC_funcgroup2_var2'
         base_path = '/G/results/aim2_sjc/Models_TCN/Single_Neuron_InOut' + test_suffix
-        data_suffix = 'L5PC_AMPA'
-        model_suffix = 'AMPA_fullStrategy'
+        data_suffix = 'L5PC_NMDA'
+        model_suffix = 'NMDA_torch'
         
         # 动态构建analysis suffix
         analysis_suffix = build_analysis_suffix(base_path, model_suffix)

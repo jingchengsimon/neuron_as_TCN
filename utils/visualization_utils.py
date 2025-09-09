@@ -779,21 +779,21 @@ def create_optimization_report(loss_history, firing_rates_history,
     print(f"\n开始生成优化报告: {report_name}")
     
     # 1. 损失历史
-    plot_loss_history(loss_history, save_path=os.path.join(save_dir, f'{report_name}_loss_history.png'))
+    plot_loss_history(loss_history, save_path=os.path.join(save_dir, f'loss_history.png'))
     
     # 2. Firing rates演化
     if firing_rates_history:
         plot_firing_rates_evolution(
             firing_rates_history, num_segments_exc, num_segments_inh,
             time_duration_ms, input_window_size,
-            save_path=os.path.join(save_dir, f'{report_name}_firing_rates_evolution.png')
+            save_path=os.path.join(save_dir, f'firing_rates_evolution.png')
         )
     
     # 3. 优化总结
     plot_optimization_summary(
         loss_history, firing_rates_history, num_segments_exc, num_segments_inh,
         time_duration_ms, input_window_size,
-        save_path=os.path.join(save_dir, f'{report_name}_summary.png')
+        save_path=os.path.join(save_dir, f'summary.png')
     )
     
     # 4. 优化后的firing rates可视化

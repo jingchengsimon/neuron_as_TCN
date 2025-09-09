@@ -1,7 +1,8 @@
 import numpy as np
-from keras.models import load_model
+import torch
+import torch.nn as nn
 import pickle
-from utils.fit_CNN import parse_sim_experiment_file
+from utils.fit_CNN_torch import parse_sim_experiment_file, create_temporaly_convolutional_model
 
 class FiringRatesProcessor:
     """
@@ -18,32 +19,46 @@ class FiringRatesProcessor:
             model_params_path: 对应的参数.pickle文件路径
             time_duration_ms: 时间长度，默认300ms
         """
+        # 解析路径，支持.h5或.pt（优先.pt）
         self.model_path = model_path
-        self.model_params_path = model_params_path
-        self.time_duration_ms = time_duration_ms
-        
-        # 加载模型和参数
-        self.model = load_model(model_path)
+        pt_path = model_path.replace('.h5', '.pt') if model_path.endswith('.h5') else model_path
+        # 加载参数
         with open(model_params_path, 'rb') as f:
             self.model_params = pickle.load(f)
         
         # 提取模型架构信息
         self.architecture_dict = self.model_params['architecture_dict']
         self.input_window_size = self.architecture_dict['input_window_size']
+        # 重建PyTorch模型并加载权重
+        # 估算segments数量（与训练时一致：总和为exc+inh）
+        # 这里维持原先常量配置
+        self.num_segments_exc = 639
+        self.num_segments_inh = 640
+        self.time_duration_ms = time_duration_ms
+        total_segments = self.num_segments_exc + self.num_segments_inh
+        self.model = create_temporaly_convolutional_model(
+            self.input_window_size,
+            self.num_segments_exc,
+            self.num_segments_inh,
+            self.architecture_dict['filter_sizes_per_layer'],
+            self.architecture_dict['num_filters_per_layer'],
+            self.architecture_dict['activation_function_per_layer'],
+            self.architecture_dict['l2_regularization_per_layer'],
+            self.architecture_dict['strides_per_layer'],
+            self.architecture_dict['dilation_rates_per_layer'],
+            self.architecture_dict['initializer_per_layer'],
+            use_improved_initialization=False
+        )
+        # 加载state_dict
+        try:
+            state = torch.load(pt_path, map_location='cpu')
+            self.model.load_state_dict(state)
+        except Exception as e:
+            print(f"警告：无法加载权重 {pt_path}，原因：{e}")
+        self.model.eval()
         
-        # 从训练数据中获取segment数量信息
-        train_files = self.model_params['data_dict']['train_files']
-        if train_files:
-            # 解析一个训练文件来获取segment信息
-            X_sample, _, _ = parse_sim_experiment_file(train_files[0])
-            self.num_segments_exc = 639  # 根据train_and_analyze.py中的设置
-            self.num_segments_inh = 640  # SJC数据集的设置
-            self.num_segments_total = self.num_segments_exc + self.num_segments_inh
-        else:
-            # 默认值
-            self.num_segments_exc = 639
-            self.num_segments_inh = 640
-            self.num_segments_total = 1279
+        # segments数量（保持原逻辑常量）
+        self.num_segments_total = self.num_segments_exc + self.num_segments_inh
         
         print(f"FiringRatesProcessor初始化成功:")
         print(f"  输入窗口大小: {self.input_window_size}ms")
@@ -190,7 +205,11 @@ class FiringRatesProcessor:
         batch_size = firing_rates.shape[0]
         
         # 只对前一半batch使用Poisson过程生成spikes
-        first_half_spikes = np.random.poisson(firing_rates).astype(np.float32)
+        # 安全处理：去NaN/Inf并限制取值范围到[0, 0.1]
+        safe_rates = np.nan_to_num(firing_rates, nan=0.0, posinf=0.1, neginf=0.0).astype(np.float32)
+        safe_rates = np.where(np.isfinite(safe_rates), safe_rates, 0.0).astype(np.float32)
+        safe_rates = np.clip(safe_rates, 0.0, 0.1)
+        first_half_spikes = np.random.poisson(safe_rates).astype(np.float32)
         first_half_spikes = np.clip(first_half_spikes, 0, 1)  # 限制为0或1 (binary)
         
         # 复制前一半到后一半，确保基础spikes完全相同
@@ -241,10 +260,12 @@ class FiringRatesProcessor:
         elif input_time_steps > self.input_window_size:
             model_input = model_input[:, -self.input_window_size:, :]
         
-        # 模型预测
-        predictions = self.model.predict(model_input, verbose=0)
-        spike_predictions = predictions[0]  # 第一个输出是spike预测
-        
+        # 模型预测 (PyTorch)
+        # 转为(B, T, C) -> torch
+        model_input_t = torch.from_numpy(model_input.astype(np.float32))
+        with torch.no_grad():
+            pred_spike_t, _ = self.model(model_input_t)
+        spike_predictions = pred_spike_t.numpy()
         return spike_predictions, spike_trains
     
     def get_model_info(self):

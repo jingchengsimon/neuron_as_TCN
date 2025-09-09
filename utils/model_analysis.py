@@ -9,18 +9,15 @@ from pathlib import Path
 import os
 from sklearn.metrics import roc_auc_score, roc_curve, auc
 from sklearn.metrics import precision_recall_curve, average_precision_score
-import tensorflow.compat.v1 as tf
-tf.disable_v2_behavior()
-from keras.models import load_model
+import torch
+import torch.nn as nn
+from utils.fit_CNN_torch import create_temporaly_convolutional_model, parse_sim_experiment_file
 
 def load_test_data(test_file):
     """
     加载测试数据 - 修复版本
     """
     try:
-        # 使用与训练数据相同的解析函数
-        from fit_CNN import parse_sim_experiment_file
-        
         # 解析测试文件
         X_test, y_spike_test, y_soma_test = parse_sim_experiment_file(test_file)
         
@@ -41,82 +38,122 @@ def load_test_data(test_file):
 
 def calculate_auc_metrics(model_path, test_data_dir):
     """
-    计算模型的AUC指标 - 修复版本
+    计算模型的AUC指标 - 修复版本（PyTorch）
     """
     try:
-        # 清理GPU内存
-        # tf.keras.backend.clear_session()
-        # gc.collect()
+        # 设备（AUC计算默认CPU足够）
+        device = torch.device('cpu')
 
-        os.environ["CUDA_VISIBLE_DEVICES"] = "-1"  # 强制使用CPU
+        # 从pickle元数据中恢复架构
+        with open(model_path, 'rb') as f:
+            meta = pickle.load(f)
+        arch = meta['architecture_dict']
 
-        # 加载模型
-        model = load_model(model_path.replace('.pickle', '.h5'))
-        
+        # 恢复必要的超参
+        input_window_size = arch['input_window_size']
+        filter_sizes_per_layer = arch['filter_sizes_per_layer']
+        num_filters_per_layer = arch['num_filters_per_layer']
+        activation_function_per_layer = arch['activation_function_per_layer']
+        l2_regularization_per_layer = arch['l2_regularization_per_layer']
+        strides_per_layer = arch['strides_per_layer']
+        dilation_rates_per_layer = arch['dilation_rates_per_layer']
+        initializer_per_layer = arch['initializer_per_layer']
+
+        # 需要知道segments数量以构建模型；从测试文件读取一份数据获取num_segments
+        test_files_probe = glob.glob(os.path.join(test_data_dir, '*.p'))
+        if not test_files_probe:
+            print(f"No test files found in {test_data_dir}")
+            return None
+        X_probe, _, _ = parse_sim_experiment_file(test_files_probe[0])
+        # X_probe: (num_segments, time_steps, num_simulations)
+        total_segments = X_probe.shape[0]
+        # 假设exc/inh均分或近似，直接拆分为两半（与训练阶段使用的相同总和即可）
+        num_segments_exc = total_segments // 2
+        num_segments_inh = total_segments - num_segments_exc
+
+        # 构建PyTorch模型并加载权重
+        model_torch = create_temporaly_convolutional_model(
+            input_window_size,
+            num_segments_exc,
+            num_segments_inh,
+            filter_sizes_per_layer,
+            num_filters_per_layer,
+            activation_function_per_layer,
+            l2_regularization_per_layer,
+            strides_per_layer,
+            dilation_rates_per_layer,
+            initializer_per_layer,
+            use_improved_initialization=False
+        ).to(device)
+
+        # 加载state_dict（与pickle同名的.pt文件）
+        pt_path = model_path.replace('.pickle', '.pt')
+        if not os.path.exists(pt_path):
+            print(f"Model weights not found: {pt_path}")
+            return None
+        state = torch.load(pt_path, map_location=device)
+        model_torch.load_state_dict(state)
+        model_torch.eval()
+         
         # 加载测试数据
         test_files = glob.glob(os.path.join(test_data_dir, '*.p'))
         if not test_files:
             print(f"No test files found in {test_data_dir}")
             return None
-        
+         
         # 使用第一个测试文件进行评估
         test_file = test_files[0]
         print(f"Using test file: {test_file}")
-        
+         
         # 加载测试数据
         X_test, y_spike_test, y_soma_test = load_test_data(test_file)
-        
+         
         if X_test is None:
             print("Failed to load test data")
             return None
-        
+         
         print(f"Test data shape: X={X_test.shape}, y_spike={y_spike_test.shape}, y_soma={y_soma_test.shape}")
-        
-        # 为了计算AUC，我们需要将数据分成小批次
-        # 因为模型期望的输入是 (batch_size, window_size, num_segments)
-        # 但我们的数据是 (num_simulations, time_steps, num_segments)
-        
-        # 获取模型的输入窗口大小
-        input_window_size = model.input_shape[1]  # 假设输入是 (None, window_size, features)
-        num_segments = model.input_shape[2]
-        
-        print(f"Model expects input shape: {model.input_shape}")
+         
+        # 窗口与特征
+        num_segments = X_test.shape[2]
+        print(f"Model expects input shape: (None, {input_window_size}, {num_segments})")
         print(f"Input window size: {input_window_size}, num_segments: {num_segments}")
-        
+         
         # 创建滑动窗口来生成测试样本
         batch_size = 32  # 可以根据内存调整
         all_predictions_spike = []
         all_predictions_soma = []
         all_targets_spike = []
         all_targets_soma = []
-        
+         
         # 对每个模拟进行预测
         for sim_idx in range(min(10, X_test.shape[0])):  # 限制模拟数量以节省时间
             sim_data = X_test[sim_idx]  # (time_steps, num_segments)
             sim_spike = y_spike_test[sim_idx]  # (time_steps, 1)
             sim_soma = y_soma_test[sim_idx]   # (time_steps, 1)
-            
+             
             # 创建滑动窗口
             for start_idx in range(0, sim_data.shape[0] - input_window_size + 1, input_window_size // 2):
                 end_idx = start_idx + input_window_size
-                
+                 
                 # 提取窗口数据
                 window_data = sim_data[start_idx:end_idx]  # (window_size, num_segments)
                 window_spike = sim_spike[start_idx:end_idx]  # (window_size, 1)
                 window_soma = sim_soma[start_idx:end_idx]   # (window_size, 1)
-                
-                # 添加batch维度
-                window_data = window_data[np.newaxis, :, :]  # (1, window_size, num_segments)
-                
-                # 预测
-                pred_spike, pred_soma = model.predict(window_data, verbose=0)
-                
+                 
+                # 转为Tensor并预测
+                window_tensor = torch.from_numpy(window_data.astype(np.float32))[None, ...].to(device)  # (1, T, C)
+                with torch.no_grad():
+                    pred_spike_t, pred_soma_t = model_torch(window_tensor)
+                pred_spike = pred_spike_t.cpu().numpy()
+                pred_soma = pred_soma_t.cpu().numpy()
+                 
                 # 收集结果
                 all_predictions_spike.append(pred_spike.flatten())
                 all_predictions_soma.append(pred_soma.flatten())
                 all_targets_spike.append(window_spike.flatten())
                 all_targets_soma.append(window_soma.flatten())
-        
+         
         # 合并所有预测结果
         if not all_predictions_spike:
             print("No predictions generated")

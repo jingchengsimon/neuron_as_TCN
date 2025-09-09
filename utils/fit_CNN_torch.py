@@ -1,27 +1,22 @@
 import numpy as np
+import pandas as pd
+import glob
 import time
 import sys
 import os
 import pickle
+import matplotlib.pyplot as plt
+import seaborn as sns
+from pathlib import Path
 
-# 设置TensorFlow日志级别，减少警告信息
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+# 移除TensorFlow/Keras相关依赖，改为使用PyTorch
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import torch.optim as optim
 
-# 禁用TensorFlow的图优化器警告
-import tensorflow.compat.v1 as tf
-tf.disable_v2_behavior()
-tf.logging.set_verbosity(tf.logging.ERROR)
-
-import keras
-from keras.models import Model
-from keras.optimizers import Nadam
-from keras.layers import BatchNormalization
-from keras.layers import Input
-from keras.layers import Conv1D
-from keras.layers import LeakyReLU
-from keras.regularizers import l2
-from keras import initializers
-
+from sklearn import decomposition
+from datetime import datetime  
 
 # some fixes for python 3
 if sys.version_info[0]<3:
@@ -104,6 +99,117 @@ def parse_sim_experiment_file(sim_experiment_file, print_logs=False):
     return X, y_spike, y_soma
 
 
+class CausalConv1d(nn.Module):
+    """
+    因果卷积：仅在左侧进行padding，保证输出time维度与输入一致（stride=1时）。
+    注意：当stride>1时，输出会按stride下采样。
+    """
+    def __init__(self, in_channels, out_channels, kernel_size, stride=1, dilation=1, bias=True):
+        super().__init__()
+        self.kernel_size = kernel_size
+        self.dilation = dilation
+        self.stride = stride
+        self.conv = nn.Conv1d(in_channels, out_channels, kernel_size=kernel_size,
+                              stride=stride, dilation=dilation, padding=0, bias=bias)
+
+    def forward(self, x):
+        # x: (B, C, T)
+        pad_left = (self.kernel_size - 1) * self.dilation
+        x_padded = F.pad(x, (pad_left, 0))  # 仅左侧padding
+        y = self.conv(x_padded)
+        return y
+
+class TCNModel(nn.Module):
+    """
+    PyTorch版的时间卷积网络模型。
+    维持与原模型相同的层次逻辑：
+    - 若干层Conv1d(因果卷积) + BatchNorm1d + 激活
+    - 两个输出头：spikes(sigmoid) 与 somatic(linear)
+    输入: (batch, time, channels) 以与原数据生成器保持一致，然后内部转换为 (batch, channels, time)
+    输出: spikes (batch, time, 1), somatic (batch, time, 1)
+    """
+    def __init__(self, max_input_window_size, num_segments_exc, num_segments_inh, 
+                 filter_sizes_per_layer, num_filters_per_layer, activation_function_per_layer,
+                 l2_regularization_per_layer, strides_per_layer, dilation_rates_per_layer,
+                 initializer_per_layer, use_improved_initialization=False):
+        super().__init__()
+        
+        self.input_window_size = max_input_window_size
+        in_channels = num_segments_exc + num_segments_inh
+        layers = []
+        current_channels = in_channels
+        
+        # 激活函数映射
+        def get_activation(name):
+            if name == 'relu':
+                return nn.ReLU(inplace=True)
+            if name == 'lrelu':
+                return nn.LeakyReLU(0.25, inplace=True)
+            if name == 'elu':
+                return nn.ELU(inplace=True)
+            return nn.ReLU(inplace=True)
+        
+        for k in range(len(filter_sizes_per_layer)):
+            num_filters   = num_filters_per_layer[k]
+            filter_size   = filter_sizes_per_layer[k]
+            activation    = activation_function_per_layer[k]
+            l2_reg        = l2_regularization_per_layer[k]
+            stride        = strides_per_layer[k]
+            dilation_rate = dilation_rates_per_layer[k]
+            initializer   = initializer_per_layer[k]
+            
+            # 使用因果卷积：仅左侧padding，保持长度
+            conv = CausalConv1d(in_channels=current_channels, out_channels=num_filters,
+                                kernel_size=filter_size, stride=stride, dilation=dilation_rate, bias=True)
+            
+            # 初始化
+            if isinstance(initializer, (int, float)):
+                nn.init.trunc_normal_(conv.conv.weight, std=initializer)
+            else:
+                nn.init.kaiming_normal_(conv.conv.weight)
+            if conv.conv.bias is not None:
+                nn.init.zeros_(conv.conv.bias)
+            
+            layers.append(conv)
+            layers.append(nn.BatchNorm1d(num_features=num_filters))
+            layers.append(get_activation(activation))
+            current_channels = num_filters
+        
+        self.tcn = nn.Sequential(*layers)
+        
+        # 输出层
+        if use_improved_initialization:
+            spike_weight_init_std = 0.01
+            spike_bias_init_val = 0.0
+            soma_weight_init_std = 0.1
+        else:
+            spike_weight_init_std = 0.001
+            spike_bias_init_val = -2.0
+            soma_weight_init_std = 0.03
+        
+        self.spikes_head = nn.Conv1d(current_channels, 1, kernel_size=1, padding=0)
+        nn.init.trunc_normal_(self.spikes_head.weight, std=spike_weight_init_std)
+        nn.init.constant_(self.spikes_head.bias, spike_bias_init_val)
+        
+        self.soma_head = nn.Conv1d(current_channels, 1, kernel_size=1, padding=0)
+        nn.init.trunc_normal_(self.soma_head.weight, std=soma_weight_init_std)
+        if self.soma_head.bias is not None:
+            nn.init.zeros_(self.soma_head.bias)
+
+    def forward(self, x):
+        # x: (batch, time, channels) -> (batch, channels, time)
+        if x.dim() != 3:
+            raise ValueError(f"Expected 3D input (batch, time, channels), got shape {tuple(x.shape)}")
+        x = x.permute(0, 2, 1)
+        y = self.tcn(x)
+        spikes = torch.sigmoid(self.spikes_head(y))   # (B, 1, T)
+        soma   = self.soma_head(y)                    # (B, 1, T)
+        # 转回 (B, T, 1)
+        spikes = spikes.permute(0, 2, 1)
+        soma   = soma.permute(0, 2, 1)
+        return spikes, soma
+
+
 def create_temporaly_convolutional_model(max_input_window_size, num_segments_exc, num_segments_inh, filter_sizes_per_layer,
                                                                                              num_filters_per_layer,
                                                                                              activation_function_per_layer,
@@ -113,97 +219,28 @@ def create_temporaly_convolutional_model(max_input_window_size, num_segments_exc
                                                                                              initializer_per_layer,
                                                                                              use_improved_initialization=False):
     """
-    创建时间卷积网络模型
-    
-    Args:
-        use_improved_initialization: 是否使用改进的初始化策略
-            False: 使用原有方案
-            True: 使用改进方案（更好的spike输出初始化、Focal Loss等）
+    创建时间卷积网络模型（PyTorch实现）。
+    保持函数名与参数不变，返回PyTorch的nn.Module实例。
     """
-    
-    # define input and flatten it
-    binary_input_mat = Input(shape=(max_input_window_size, num_segments_exc + num_segments_inh), name='input_layer')
-
-    # define convolutional layers
-    for k in range(len(filter_sizes_per_layer)):
-        num_filters   = num_filters_per_layer[k]
-        filter_size   = filter_sizes_per_layer[k]
-        activation    = activation_function_per_layer[k]
-        l2_reg        = l2_regularization_per_layer[k]
-        stride        = strides_per_layer[k]
-        dilation_rate = dilation_rates_per_layer[k]
-        initializer   = initializer_per_layer[k]
-        
-        if activation == 'lrelu':
-            leaky_relu_slope = 0.25
-            activation = lambda x: LeakyReLU(alpha=leaky_relu_slope)(x)
-            print('leaky relu slope = %.4f' %(leaky_relu_slope))
-            
-        if not isinstance(initializer, basestring):
-            initializer = initializers.TruncatedNormal(stddev=initializer)
-        
-        # first layer
-        if k == 0: 
-            x = Conv1D(num_filters, filter_size, activation=activation, kernel_initializer=initializer, kernel_regularizer=l2(l2_reg),
-                       strides=stride, dilation_rate=dilation_rate, padding='causal', name='layer_%d' %(k + 1))(binary_input_mat)
-        # other layers
-        else: 
-            x = Conv1D(num_filters, filter_size, activation=activation, kernel_initializer=initializer, kernel_regularizer=l2(l2_reg),
-                       strides=stride, dilation_rate=dilation_rate, padding='causal', name='layer_%d' %(k + 1))(x)
-        x = BatchNormalization(name='layer_%d_BN' %(k + 1))(x)
-    
-    # 根据配置选择不同的初始化策略
-    if use_improved_initialization:
-        print("使用改进的初始化策略...")
-        # 改进的spike输出初始化
-        output_spike_init_weights = initializers.TruncatedNormal(stddev=0.01)  # 从0.001增加到0.01
-        output_spike_init_bias    = initializers.Constant(value=0.0)          # 从-2.0改为0.0，避免过度偏向"无spike"
-        # 改进的soma输出初始化
-        output_soma_init = initializers.TruncatedNormal(stddev=0.1)           # 从0.03增加到0.1
-    else:
-        print("使用原有初始化策略...")
-        # 原有初始化
-        output_spike_init_weights = initializers.TruncatedNormal(stddev=0.001)
-        output_spike_init_bias    = initializers.Constant(value=-2.0)
-        output_soma_init = initializers.TruncatedNormal(stddev=0.03)
-
-    output_spike_predictions = Conv1D(1, 1, activation='sigmoid', kernel_initializer=output_spike_init_weights, bias_initializer=output_spike_init_bias,
-                                                                  kernel_regularizer=l2(1e-8), padding='causal', name='spikes')(x)
-    output_soma_voltage_pred = Conv1D(1, 1, activation='linear' , kernel_initializer=output_soma_init, kernel_regularizer=l2(1e-8), padding='causal', name='somatic')(x)
-
-    temporaly_convolutional_network_model = Model(inputs=binary_input_mat, outputs=
-                                                  [output_spike_predictions, output_soma_voltage_pred])
-
-    optimizer_to_use = Nadam(lr=0.0001)
-    
-    # 根据配置选择不同的loss函数
-    if use_improved_initialization:
-        print("使用改进的Loss函数...")
-        # 使用Focal Loss处理类别不平衡问题
-        def focal_loss(gamma=2, alpha=0.75):
-            def focal_loss_fixed(y_true, y_pred):
-                pt_1 = tf.where(tf.equal(y_true, 1), y_pred, 1-y_pred)
-                pt_1 = tf.keras.backend.clip(pt_1, 1e-7, 1.0)
-                return -tf.reduce_mean(alpha * tf.pow(1-pt_1, gamma) * tf.math.log(pt_1))
-            return focal_loss_fixed
-        
-        # 使用改进的loss权重
-        temporaly_convolutional_network_model.compile(optimizer=optimizer_to_use,
-                                                      loss=[focal_loss(), 'mse'],
-                                                      loss_weights=[1.0, 0.006])  
-    else:
-        print("使用原有Loss函数...")
-        # 原有loss配置
-        temporaly_convolutional_network_model.compile(optimizer=optimizer_to_use,
-                                                      loss=['binary_crossentropy','mse'],
-                                                      loss_weights=[1.0, 0.006]) 
-    
-    temporaly_convolutional_network_model.summary()
-    
-    return temporaly_convolutional_network_model
+    print("使用PyTorch实现的TCN模型...")
+    model = TCNModel(
+        max_input_window_size=max_input_window_size,
+        num_segments_exc=num_segments_exc,
+        num_segments_inh=num_segments_inh,
+        filter_sizes_per_layer=filter_sizes_per_layer,
+        num_filters_per_layer=num_filters_per_layer,
+        activation_function_per_layer=activation_function_per_layer,
+        l2_regularization_per_layer=l2_regularization_per_layer,
+        strides_per_layer=strides_per_layer,
+        dilation_rates_per_layer=dilation_rates_per_layer,
+        initializer_per_layer=initializer_per_layer,
+        use_improved_initialization=use_improved_initialization
+    )
+    print(model)
+    return model
 
 
-class SimulationDataGenerator(keras.utils.Sequence):
+class SimulationDataGenerator:
     'thread-safe data generator for network training'
 
     def __init__(self, sim_experiment_files, num_files_per_epoch=10,
@@ -239,6 +276,8 @@ class SimulationDataGenerator(keras.utils.Sequence):
         self.y_soma_threshold = y_soma_threshold
         self.use_improved_sampling = use_improved_sampling
         self.spike_rich_ratio = spike_rich_ratio
+        
+        # self.y_DTV_threshold = y_DTV_threshold
         
         self.curr_epoch_files_to_use = None
         self.on_epoch_end()
@@ -280,21 +319,27 @@ class SimulationDataGenerator(keras.utils.Sequence):
             
         # 根据配置选择不同的采样策略
         if self.use_improved_sampling:
-            selected_sim_inds, selected_end_time_inds = self._select_balanced_windows()
+            selected_sim_inds, selected_time_inds = self._select_balanced_windows()
         else:
             # 原有随机采样策略
             selected_sim_inds = np.random.choice(range(self.num_simulations_per_file), size=self.batch_size, replace=True)
-            sampling_end_time = max(self.ignore_time_from_start, self.window_size_ms)
-            selected_end_time_inds = np.random.choice(range(sampling_end_time, self.sim_duration_ms), size=self.batch_size, replace=False)
+            sampling_start_time = max(self.ignore_time_from_start, self.window_size_ms)
+            selected_time_inds = np.random.choice(range(sampling_start_time, self.sim_duration_ms), size=self.batch_size, replace=False)
         
         # gather batch and yield it
-        X_batch       = np.zeros((self.batch_size, self.window_size_ms, self.num_segments))
-        y_spike_batch = np.zeros((self.batch_size, self.window_size_ms, self.num_output_channels_y1))
-        y_soma_batch  = np.zeros((self.batch_size, self.window_size_ms, self.num_output_channels_y2))
-        for k, (sim_ind, win_time) in enumerate(zip(selected_sim_inds, selected_end_time_inds)):
+        X_batch       = np.zeros((self.batch_size, self.window_size_ms, self.num_segments), dtype=np.float32)
+        y_spike_batch = np.zeros((self.batch_size, self.window_size_ms, self.num_output_channels_y1), dtype=np.float32)
+        y_soma_batch  = np.zeros((self.batch_size, self.window_size_ms, self.num_output_channels_y2), dtype=np.float32)
+        for k, (sim_ind, win_time) in enumerate(zip(selected_sim_inds, selected_time_inds)):
+            # print('sim_ind: %d, win_time: %d' %(sim_ind, win_time))
             X_batch[k,:,:]       = self.X[sim_ind, win_time - self.window_size_ms:win_time,:]
             y_spike_batch[k,:,:] = self.y_spike[sim_ind, win_time - self.window_size_ms:win_time,:]
             y_soma_batch[k,:,:]  = self.y_soma[sim_ind, win_time - self.window_size_ms:win_time,:]
+        
+        # 转为torch.Tensor，便于直接喂给PyTorch模型
+        X_batch_t       = torch.from_numpy(X_batch)           # (B, T, C)
+        y_spike_batch_t = torch.from_numpy(y_spike_batch)     # (B, T, 1)
+        y_soma_batch_t  = torch.from_numpy(y_soma_batch)      # (B, T, 1)
         
         # increment the number of batches collected from each file
         try:
@@ -303,7 +348,7 @@ class SimulationDataGenerator(keras.utils.Sequence):
             self.batches_per_file_dict[self.curr_file_in_use] = 1
         
         # return the actual batch
-        return (X_batch, [y_spike_batch, y_soma_batch])
+        return (X_batch_t, [y_spike_batch_t, y_soma_batch_t])
 
     def _select_balanced_windows(self):
         """改进的采样策略：优先选择包含spike的时间窗口"""
@@ -370,6 +415,7 @@ class SimulationDataGenerator(keras.utils.Sequence):
         selected_end_time_inds = [w[1] for w in all_windows]
         
         return selected_sim_inds, selected_end_time_inds
+
 
     def on_epoch_end(self):
         'selects new subset of files to draw samples from'
