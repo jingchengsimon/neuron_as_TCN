@@ -5,281 +5,28 @@ import os
 import pickle
 from datetime import datetime  
 from itertools import product
-# from fit_CNN_pytorch import train_and_save_pytorch
+from utils.gpu_monitor import GPUMonitor, configure_pytorch_gpu, get_gpu_memory_info
 from utils.fit_CNN_torch import create_temporaly_convolutional_model, SimulationDataGenerator
 from utils.model_analysis import (
     load_model_results, print_model_summary, 
     plot_training_curves, plot_model_comparison, analyze_training_stability, plot_auc_analysis
 )
-# import tensorflow as tf
-from keras.optimizers import Nadam
-from keras.callbacks import LearningRateScheduler
+# TensorFlow/Keras imports removed - using PyTorch instead
 from tqdm import tqdm
 import torch
 import torch.nn as nn
 import torch.optim as optim
-
-# 添加GPU监控库
-try:
-    import pynvml
-    pynvml.nvmlInit()
-    GPU_MONITORING_AVAILABLE = True
-except ImportError:
-    print("Warning: pynvml not available. Install with: pip install nvidia-ml-py")
-    GPU_MONITORING_AVAILABLE = False
-
-class GPUMonitor:
-    """GPU监控类，用于监控GPU使用情况和性能"""
-    
-    def __init__(self, gpu_index=0):
-        """
-        初始化GPU监控器
-        
-        Args:
-            gpu_index: GPU设备索引，默认为0
-        """
-        self.gpu_index = gpu_index
-        self.available = GPU_MONITORING_AVAILABLE
-        self.handle = None
-        
-        if self.available:
-            try:
-                self.handle = pynvml.nvmlDeviceGetHandleByIndex(gpu_index)
-                gpu_name_bytes = pynvml.nvmlDeviceGetName(self.handle)
-                # 处理不同版本的pynvml返回格式
-                if isinstance(gpu_name_bytes, bytes):
-                    self.gpu_name = gpu_name_bytes.decode('utf-8')
-                else:
-                    self.gpu_name = str(gpu_name_bytes)
-                self.total_memory = pynvml.nvmlDeviceGetMemoryInfo(self.handle).total
-            except Exception as e:
-                print(f"Error initializing GPU monitor: {e}")
-                self.available = False
-    
-    def get_utilization(self):
-        """获取GPU利用率"""
-        if not self.available or not self.handle:
-            return "N/A"
-        
-        try:
-            utilization = pynvml.nvmlDeviceGetUtilizationRates(self.handle)
-            return utilization.gpu
-        except:
-            return "Error"
-    
-    def get_memory_usage(self):
-        """获取GPU内存使用情况"""
-        if not self.available or not self.handle:
-            return "N/A"
-        
-        try:
-            memory_info = pynvml.nvmlDeviceGetMemoryInfo(self.handle)
-            used_mb = memory_info.used / 1024 / 1024
-            total_mb = memory_info.total / 1024 / 1024
-            return f"{used_mb:.0f}/{total_mb:.0f} MB"
-        except:
-            return "Error"
-    
-    def get_memory_percent(self):
-        """获取GPU内存使用百分比"""
-        if not self.available or not self.handle:
-            return "N/A"
-        
-        try:
-            memory_info = pynvml.nvmlDeviceGetMemoryInfo(self.handle)
-            return (memory_info.used / memory_info.total) * 100
-        except:
-            return "Error"
-    
-    def get_temperature(self):
-        """获取GPU温度"""
-        if not self.available or not self.handle:
-            return "N/A"
-        
-        try:
-            temp = pynvml.nvmlDeviceGetTemperature(self.handle, pynvml.NVML_TEMPERATURE_GPU)
-            return temp
-        except:
-            return "Error"
-    
-    def get_power_usage(self):
-        """获取GPU功耗"""
-        if not self.available or not self.handle:
-            return "N/A"
-        
-        try:
-            power = pynvml.nvmlDeviceGetPowerUsage(self.handle) / 1000.0  # 转换为瓦特
-            return power
-        except:
-            return "Error"
-    
-    def get_comprehensive_info(self):
-        """获取GPU综合信息"""
-        if not self.available:
-            return {
-                'name': 'N/A',
-                'utilization': 'N/A',
-                'memory_usage': 'N/A',
-                'memory_percent': 'N/A',
-                'temperature': 'N/A',
-                'power': 'N/A'
-            }
-        
-        return {
-            'name': self.gpu_name if hasattr(self, 'gpu_name') else 'N/A',
-            'utilization': self.get_utilization(),
-            'memory_usage': self.get_memory_usage(),
-            'memory_percent': self.get_memory_percent(),
-            'temperature': self.get_temperature(),
-            'power': self.get_power_usage()
-        }
-    
-    def print_status(self, prefix=""):
-        """打印当前GPU状态"""
-        info = self.get_comprehensive_info()
-        print(f"{prefix}GPU: {info['name']}")
-        print(f"{prefix}利用率: {info['utilization']}%")
-        print(f"{prefix}内存: {info['memory_usage']} ({info['memory_percent']:.1f}%)")
-        print(f"{prefix}温度: {info['temperature']}°C")
-        print(f"{prefix}功耗: {info['power']}W")
-    
-    def monitor_continuously(self, duration_seconds=300, interval_seconds=5, output_file=None):
-        """
-        持续监控GPU使用情况
-        
-        Args:
-            duration_seconds: 监控持续时间（秒）
-            interval_seconds: 监控间隔（秒）
-            output_file: 输出文件路径（可选）
-        """
-        if not self.available:
-            print("GPU monitoring not available")
-            return
-        
-        print(f"\n开始GPU监控 ({duration_seconds}秒, 每{interval_seconds}秒记录一次):")
-        print("时间戳           | GPU利用率(%) | 内存使用(MB) | 内存使用率(%) | 温度(°C) | 功耗(W)")
-        print("-" * 90)
-        
-        if output_file:
-            with open(output_file, 'w') as f:
-                f.write("timestamp,utilization,memory_used,memory_percent,temperature,power\n")
-        
-        start_time = time.time()
-        end_time = start_time + duration_seconds
-        
-        try:
-            while time.time() < end_time:
-                elapsed = time.time() - start_time
-                info = self.get_comprehensive_info()
-                
-                timestamp = time.strftime("%H:%M:%S")
-                line = f"{timestamp} | {info['utilization']:11} | {info['memory_usage']:10} | {info['memory_percent']:12.1f} | {info['temperature']:8} | {info['power']:6}"
-                print(line)
-                
-                if output_file:
-                    with open(output_file, 'a') as f:
-                        f.write(f"{timestamp},{info['utilization']},{info['memory_usage']},{info['memory_percent']},{info['temperature']},{info['power']}\n")
-                
-                time.sleep(interval_seconds)
-        except KeyboardInterrupt:
-            print("\n监控已停止")
-        
-        print("-" * 90)
-        print("GPU监控完成")
-    
-    def benchmark_performance(self, test_duration=60):
-        """
-        性能基准测试
-        
-        Args:
-            test_duration: 测试持续时间（秒）
-        """
-        if not self.available:
-            print("GPU monitoring not available for benchmarking")
-            return
-        
-        print(f"\n开始GPU性能基准测试 ({test_duration}秒)...")
-        
-        # 收集性能数据
-        utilizations = []
-        memory_percents = []
-        temperatures = []
-        power_usages = []
-        
-        start_time = time.time()
-        end_time = start_time + test_duration
-        
-        while time.time() < end_time:
-            info = self.get_comprehensive_info()
-            
-            if info['utilization'] != 'N/A' and info['utilization'] != 'Error':
-                utilizations.append(info['utilization'])
-            if info['memory_percent'] != 'N/A' and info['memory_percent'] != 'Error':
-                memory_percents.append(info['memory_percent'])
-            if info['temperature'] != 'N/A' and info['temperature'] != 'Error':
-                temperatures.append(info['temperature'])
-            if info['power'] != 'N/A' and info['power'] != 'Error':
-                power_usages.append(info['power'])
-            
-            time.sleep(1)
-        
-        # 计算统计信息
-        print("\n=== 性能基准测试结果 ===")
-        if utilizations:
-            print(f"GPU利用率 - 平均: {np.mean(utilizations):.1f}%, 最大: {np.max(utilizations):.1f}%, 最小: {np.min(utilizations):.1f}%")
-        if memory_percents:
-            print(f"内存使用率 - 平均: {np.mean(memory_percents):.1f}%, 最大: {np.max(memory_percents):.1f}%, 最小: {np.min(memory_percents):.1f}%")
-        if temperatures:
-            print(f"GPU温度 - 平均: {np.mean(temperatures):.1f}°C, 最大: {np.max(temperatures):.1f}°C, 最小: {np.min(temperatures):.1f}°C")
-        if power_usages:
-            print(f"GPU功耗 - 平均: {np.mean(power_usages):.1f}W, 最大: {np.max(power_usages):.1f}W, 最小: {np.min(power_usages):.1f}W")
-        
-        # 性能评估
-        avg_utilization = np.mean(utilizations) if utilizations else 0
-        if avg_utilization > 80:
-            print("✓ GPU利用率优秀 (>80%)")
-        elif avg_utilization > 50:
-            print("○ GPU利用率良好 (50-80%)")
-        elif avg_utilization > 20:
-            print("⚠ GPU利用率偏低 (20-50%)")
-        else:
-            print("✗ GPU利用率过低 (<20%)")
-        
-        print("========================")
-
-def lr_warmup_decay(epoch, lr):
-    warmup_epochs = 10
-    init_lr = 0.0001
-    max_lr = 0.001
-    decay_rate = 0.95
-    if epoch < warmup_epochs:
-        # 线性warmup
-        return init_lr + (max_lr - init_lr) * (epoch + 1) / warmup_epochs
-    else:
-        # 衰减
-        return max_lr * (decay_rate ** (epoch - warmup_epochs))
+import torch.cuda as cuda
 
 def train_and_save(network_depth, num_filters_per_layer, input_window_size, num_epochs, 
                    train_data_dir, valid_data_dir, test_data_dir, models_dir,
                    use_improved_initialization=False, use_improved_sampling=False, spike_rich_ratio=0.5):
 
-    # ========== GPU验证代码 - 添加在这里 ==========
-    # import tensorflow as tf
-    # print("Training device check:")
-    # print("TensorFlow built with CUDA:", tf.test.is_built_with_cuda())
-    # print("GPU devices:", tf.config.list_physical_devices('GPU'))
+    # ========== PyTorch GPU Configuration ==========
+    device = configure_pytorch_gpu()
+    print(f"Training will use device: {device}")
     # ===========================================
 
-    # use_multiprocessing = True  # 关闭多进程以避免内存问题
-    # num_workers = 4  # 减少worker数量
-
-    # print('------------------------------------------------------------------')
-    # print('use_multiprocessing = %s, num_workers = %d' %(str(use_multiprocessing), num_workers))
-    # print('------------------------------------------------------------------')
-
-    # ------------------------------------------------------------------
-    # basic configurations and directories
-    # ------------------------------------------------------------------
     synapse_type = 'NMDA'
         
     # ------------------------------------------------------------------
@@ -387,15 +134,21 @@ def train_and_save(network_depth, num_filters_per_layer, input_window_size, num_
     assert(input_window_size > sum(filter_sizes_per_layer))
     temporal_conv_net = create_temporaly_convolutional_model(input_window_size, num_segments_exc, num_segments_inh, 
                                                             filter_sizes_per_layer, num_filters_per_layer,
-                                                            activation_function_per_layer, l2_regularization_per_layer,
-                                                            strides_per_layer, dilation_rates_per_layer, initializer_per_layer,
+                                                            activation_function_per_layer, strides_per_layer, 
+                                                            dilation_rates_per_layer, initializer_per_layer,
                                                             use_improved_initialization=use_improved_initialization)
 
-    # 将模型移动到设备（CUDA优先）并创建损失函数
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    # Move model to specified device and create loss functions
     temporal_conv_net = temporal_conv_net.to(device)
     spike_criterion = nn.BCELoss()
     soma_criterion = nn.MSELoss()
+    
+    # Print model information
+    total_params = sum(p.numel() for p in temporal_conv_net.parameters())
+    trainable_params = sum(p.numel() for p in temporal_conv_net.parameters() if p.requires_grad)
+    print(f"Total model parameters: {total_params:,}")
+    print(f"Trainable parameters: {trainable_params:,}")
+    print(f"Model moved to device: {next(temporal_conv_net.parameters()).device}")
 
     is_fully_connected = (network_depth == 1) or sum(filter_sizes_per_layer[1:]) == (network_depth -1)
     if is_fully_connected:
@@ -417,10 +170,10 @@ def train_and_save(network_depth, num_filters_per_layer, input_window_size, num_
     print('-----------------------------------------------')
 
     
-    num_learning_schedules = len(batch_size_per_epoch) # 1
+    num_learning_schedules = len(batch_size_per_epoch) # num_epochs
 
     training_history_dict = {}
-    for learning_schedule in range(start_learning_schedule, num_learning_schedules): # range(0, 8)
+    for learning_schedule in range(start_learning_schedule, num_learning_schedules): 
         epoch_start_time = time.time()
             
         batch_size    = batch_size_per_epoch[learning_schedule]
@@ -444,88 +197,104 @@ def train_and_save(network_depth, num_filters_per_layer, input_window_size, num_
         # 优化器只初始化一次；学习率在每个schedule设置
         if learning_schedule == 0:
             try:
-                optimizer_to_use = optim.NAdam(temporal_conv_net.parameters(), lr=learning_rate)
+                # In torch, weight_decay is equivalent to L2 regularization and is applied to all parameters (global)
+                # In keras, L2 regularization is applied to each layer separately (local)
+                optimizer = optim.NAdam(temporal_conv_net.parameters(), lr=learning_rate, weight_decay=l2_regularization_per_layer[0])
             except Exception:
-                optimizer_to_use = optim.Adam(temporal_conv_net.parameters(), lr=learning_rate)
+                optimizer = optim.Adam(temporal_conv_net.parameters(), lr=learning_rate, weight_decay=l2_regularization_per_layer[0])
         else:
-            for g in optimizer_to_use.param_groups:
+            for g in optimizer.param_groups:
                 g['lr'] = learning_rate
         
         print('-----------------------------------------------')
         print('starting epoch %d:' %(learning_schedule))
         print('-----------------------------------------------')
         print('loss weights = %s' %(str(loss_weights)))
-        # print('learning_rate = %.7f' %(learning_rate))
         print('batch_size = %d' %(batch_size))
         print('-----------------------------------------------')
         
-        # 在训练循环中添加时间监控
+        # Add time monitoring in training loop
         start_time = time.time()
         
-        # 创建GPU监控器
+        # Create GPU monitor
         gpu_monitor = GPUMonitor()
-        
-        # 训练前检查GPU状态
-        print("训练前GPU状态:")
+        print("GPU status before training:")
         gpu_monitor.print_status("  ")
-        
-        # 可选：在后台启动GPU监控（注释掉以避免干扰训练输出）
-        # import threading
-        # monitor_thread = threading.Thread(target=gpu_monitor.monitor_continuously, args=(300, 10))
-        # monitor_thread.daemon = True
-        # monitor_thread.start()
+        memory_info = get_gpu_memory_info()
+        if memory_info:
+            print(f"PyTorch GPU memory - Allocated: {memory_info['allocated']:.2f}GB, Reserved: {memory_info['reserved']:.2f}GB")
 
-        # 使用PyTorch训练循环替代Keras fit_generator
+        # Use PyTorch training loop instead of Keras fit_generator
         train_epoch_spike_losses = []
         train_epoch_soma_losses = []
         val_epoch_spike_losses = []
         val_epoch_soma_losses = []
 
         for mini_epoch in range(num_steps_multiplier):
-            # 训练一个"小epoch"（与Keras中epochs=num_steps_multiplier对齐）
+            # Train one "mini-epoch" (aligned with Keras epochs=num_steps_multiplier)
             temporal_conv_net.train()
             running_spike, running_soma, running_total = 0.0, 0.0, 0.0
+            
+            # Clear GPU memory
+            if cuda.is_available():
+                cuda.empty_cache()
+            
             for step in tqdm(range(train_steps_per_epoch), desc=f"Train {learning_schedule+1}/{num_epochs} e{mini_epoch+1}/{num_steps_multiplier}", leave=False):
                 X_batch, targets = train_data_generator[step]
                 y_spike_batch, y_soma_batch = targets
-                X_batch = X_batch.to(device)
-                y_spike_batch = y_spike_batch.to(device)
-                y_soma_batch = y_soma_batch.to(device)
+                
+                # Move data to GPU
+                X_batch = X_batch.to(device, non_blocking=True)
+                y_spike_batch = y_spike_batch.to(device, non_blocking=True)
+                y_soma_batch = y_soma_batch.to(device, non_blocking=True)
 
-                optimizer_to_use.zero_grad()
+                optimizer.zero_grad()
                 pred_spike, pred_soma = temporal_conv_net(X_batch)
 
                 loss_spike = spike_criterion(pred_spike, y_spike_batch)
                 loss_soma = soma_criterion(pred_soma, y_soma_batch)
                 loss = loss_weights[0] * loss_spike + loss_weights[1] * loss_soma
+
                 loss.backward()
-                optimizer_to_use.step()
+                optimizer.step()
 
                 running_spike += loss_spike.item()
                 running_soma += loss_soma.item()
                 running_total += loss.item()
+                
+                # Clear GPU memory every 100 steps
+                if step % 100 == 0 and cuda.is_available():
+                    cuda.empty_cache()
 
-            # 记录训练平均loss（对齐Keras每个epoch一条）
+            # Record training average loss (aligned with Keras one per epoch)
             train_epoch_spike_losses.append(running_spike / train_steps_per_epoch)
             train_epoch_soma_losses.append(running_soma / train_steps_per_epoch)
 
-            # 验证
+            # Validation
             temporal_conv_net.eval()
             with torch.no_grad():
                 val_spike, val_soma = 0.0, 0.0
                 for vstep in tqdm(range(len(valid_data_generator)), desc="Valid", leave=False):
                     Xb, targets_v = valid_data_generator[vstep]
                     ysb, yvb = targets_v
-                    Xb = Xb.to(device)
-                    ysb = ysb.to(device)
-                    yvb = yvb.to(device)
+                    
+                    # Move data to GPU
+                    Xb = Xb.to(device, non_blocking=True)
+                    ysb = ysb.to(device, non_blocking=True)
+                    yvb = yvb.to(device, non_blocking=True)
+                    
                     ps, pv = temporal_conv_net(Xb)
                     val_spike += spike_criterion(ps, ysb).item()
                     val_soma  += soma_criterion(pv, yvb).item()
+                    
+                    # Clear GPU memory
+                    if vstep % 50 == 0 and cuda.is_available():
+                        cuda.empty_cache()
+                        
                 val_epoch_spike_losses.append(val_spike / max(1, len(valid_data_generator)))
                 val_epoch_soma_losses.append(val_soma / max(1, len(valid_data_generator)))
 
-        # 构造与Keras history等价的结构用于后续统计
+        # Construct structure equivalent to Keras history for subsequent statistics
         history = {
             'history': {
                 'spikes_loss': train_epoch_spike_losses,
@@ -539,8 +308,18 @@ def train_and_save(network_depth, num_filters_per_layer, input_window_size, num_
 
         training_time = time.time() - start_time
         print(f"Training time: {training_time:.2f}s")
-        print("训练后GPU状态:")
+        print("GPU status after training:")
         gpu_monitor.print_status("  ")
+        
+        # Print PyTorch GPU memory information
+        memory_info = get_gpu_memory_info()
+        if memory_info:
+            print(f"PyTorch GPU memory - Allocated: {memory_info['allocated']:.2f}GB, Reserved: {memory_info['reserved']:.2f}GB, Max allocated: {memory_info['max_allocated']:.2f}GB")
+        
+        # Clear GPU memory
+        if cuda.is_available():
+            cuda.empty_cache()
+            print("GPU memory cleared")
         
         # store the loss values in training histogry dictionary and add some additional fields about the training schedule
         try:
@@ -549,7 +328,6 @@ def train_and_save(network_depth, num_filters_per_layer, input_window_size, num_
             training_history_dict['learning_schedule'] += [learning_schedule] * num_steps_multiplier
             training_history_dict['batch_size']        += [batch_size] * num_steps_multiplier
             training_history_dict['learning_rate']     += [learning_rate] * num_steps_multiplier
-            # training_history_dict['learning_rate']     += [optimizer_to_use.get_config()['learning_rate']] * num_steps_multiplier # 使用优化器获取当前学习率
             training_history_dict['loss_weights']      += [loss_weights] * num_steps_multiplier
             training_history_dict['num_train_samples'] += [batch_size * train_steps_per_epoch] * num_steps_multiplier
             training_history_dict['num_train_steps']   += [train_steps_per_epoch] * num_steps_multiplier
@@ -561,7 +339,6 @@ def train_and_save(network_depth, num_filters_per_layer, input_window_size, num_
             training_history_dict['learning_schedule'] = [learning_schedule] * num_steps_multiplier
             training_history_dict['batch_size']        = [batch_size] * num_steps_multiplier
             training_history_dict['learning_rate']     = [learning_rate] * num_steps_multiplier
-            # training_history_dict['learning_rate']     = [optimizer_to_use.get_config()['learning_rate']] * num_steps_multiplier # 使用优化器获取当前学习率
             training_history_dict['loss_weights']      = [loss_weights] * num_steps_multiplier
             training_history_dict['num_train_samples'] = [batch_size * train_steps_per_epoch] * num_steps_multiplier
             training_history_dict['num_train_steps']   = [train_steps_per_epoch] * num_steps_multiplier
@@ -576,7 +353,7 @@ def train_and_save(network_depth, num_filters_per_layer, input_window_size, num_
         print('-----------------------------------------------------------------------------------------')
         
         # save model every once and a while
-        if np.array(training_history_dict['val_spikes_loss'][-3:]).mean() < 0.03:
+        if np.array(training_history_dict['val_spikes_loss'][-3:]).mean() < 0.05:
             model_ID = np.random.randint(100000)
             modelID_str = 'ID_%d' %(model_ID)
             train_string = 'samples_%d' %(num_training_samples)
@@ -593,6 +370,7 @@ def train_and_save(network_depth, num_filters_per_layer, input_window_size, num_
             auxilary_filename = models_dir + '%s__%s__%s__%s__%s__%s.pickle' %(model_prefix,architecture_overview,current_datetime,train_string,results_overview,modelID_str)
 
             print('-----------------------------------------------------------------------------------------')
+            print('val_spikes_loss is: %f' %(np.array(training_history_dict['val_spikes_loss'][-3:]).mean()))
             print('finished epoch %d/%d. saving...\n     "%s"\n     "%s"' %(learning_schedule +1, num_epochs, model_filename.split('/')[-1], auxilary_filename.split('/')[-1]))
             print('-----------------------------------------------------------------------------------------')
 
@@ -607,6 +385,11 @@ def train_and_save(network_depth, num_filters_per_layer, input_window_size, num_
             model_hyperparams_and_training_dict['training_history_dict']  = training_history_dict
             
             pickle.dump(model_hyperparams_and_training_dict, open(auxilary_filename, "wb"), protocol=2)
+        else:
+            print('-----------------------------------------------------------------------------------------')
+            print('val_spikes_loss is: %f' %(np.array(training_history_dict['val_spikes_loss'][-3:]).mean()))
+            print('No model saved for epoch %d/%d' %(learning_schedule +1, num_epochs))
+            print('-----------------------------------------------------------------------------------------')
 
 def analyze_and_save(models_dir, test_data_dir, save_dir):
 
@@ -649,116 +432,89 @@ def analyze_and_save(models_dir, test_data_dir, save_dir):
         print(f"Best ROC AUC: {best_model['auc_metrics']['roc_auc_spike']:.4f}")
 
 def main():
-
-    # ========== GPU配置代码 - 添加在这里 ==========
+    # ========== PyTorch GPU Configuration ==========
+    print("=== PyTorch GPU Configuration ===")
+    device = configure_pytorch_gpu()
     
-    # 检测GPU
-    # print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
-
-    # # 配置GPU内存自增长，避免显存不足
-    # gpus = tf.config.list_physical_devices('GPU')
-    # if gpus:
-    #     try:
-    #         for gpu in gpus:
-    #             tf.config.experimental.set_memory_growth(gpu, True)
-    #         print("GPU memory growth enabled")
-    #     except RuntimeError as e:
-    #         print(e)
-
-    # 可选：指定使用特定GPU（如果有多块GPU）
-    # os.environ["CUDA_VISIBLE_DEVICES"] = "0"  # 只使用第0号GPU
-    # ===========================================
-    
-    # GPU状态诊断
-    # print("\n=== GPU状态诊断 ===")
-    # print(f"TensorFlow版本: {tf.__version__}")
-    # print(f"CUDA可用: {tf.test.is_built_with_cuda()}")
-    # print(f"GPU设备数量: {len(tf.config.list_physical_devices('GPU'))}")
-    
-    # 使用GPU监控类
+    # Use GPU monitoring class
     gpu_monitor = GPUMonitor()
     if gpu_monitor.available:
-        print("GPU监控器初始化成功")
+        print("GPU monitor initialized successfully")
         gpu_monitor.print_status("  ")
     else:
-        print("GPU监控不可用，请安装: pip install nvidia-ml-py")
+        print("GPU monitoring not available, please install: pip install nvidia-ml-py")
     print("==================\n")
 
-    # 1. 定义超参数网格
+    # 1. Define hyperparameter grid
     network_depth_list = [7]
-    num_filters_per_layer_list = [256]  # 其它参数可固定或自行调整
-    input_window_size_list = [400]  # 这里遍历不同的input_window_size
+    num_filters_per_layer_list = [256]  # Other parameters can be fixed or adjusted
+    input_window_size_list = [400]  # Traverse different input_window_size here
 
-    num_epochs = 10
+    num_epochs = 1
 
-    # 2. 主控循环
-
-    # 配置改进选项
-    use_improved_initialization = False   # 设置为True启用改进的初始化策略
-    use_improved_sampling = True        # 设置为True启用改进的数据采样策略
-    spike_rich_ratio = 0.6              # 60%的样本包含spike
+    # Configure improvement options
+    use_improved_initialization = False   # Set to True to enable improved initialization strategy
+    use_improved_sampling = True        # Set to True to enable improved data sampling strategy
+    spike_rich_ratio = 0.6              # 60% of samples contain spikes
     
-    print(f"\n=== 改进配置 ===")
-    print(f"改进初始化策略: {'启用' if use_improved_initialization else '禁用'}")
-    print(f"改进数据采样: {'启用' if use_improved_sampling else '禁用'}")
+    print(f"\n=== Improvement Configuration ===")
+    print(f"Improved initialization strategy: {'Enabled' if use_improved_initialization else 'Disabled'}")
+    print(f"Improved data sampling: {'Enabled' if use_improved_sampling else 'Disabled'}")
     if use_improved_sampling:
-        print(f"Spike-rich样本比例: {spike_rich_ratio * 100:.0f}%")
+        print(f"Spike-rich sample ratio: {spike_rich_ratio * 100:.0f}%")
     print(f"================\n")
 
-    def build_analysis_suffix(base_path, model_suffix):
+    def build_analysis_suffix(test_suffix, model_suffix):
         """
-        动态构建analysis suffix
-        从base path中提取'InOut'后的部分，从model suffix中提取下划线后的部分
+        Dynamically build analysis suffix
+        Extract part after underscore from model suffix and combine with test suffix
         """
-        # 从base path中提取'InOut'后的部分
-        if 'InOut' in base_path:
-            inout_part = base_path.split('InOut')[-1]  # 获取'InOut'后的部分
-            # 如果结果以下划线开头，去掉开头的下划线
-            if inout_part.startswith('_'):
-                inout_part = inout_part[1:]
+        if test_suffix.startswith('_'):
+            test_suffix = test_suffix[1:]
         else:
-            inout_part = 'original' # base_path.split('/')[-1]  # 如果没有'InOut'，取最后一部分
-        
-        # 从model suffix中提取下划线后的部分
+            test_suffix = 'original' 
+    
+        # Extract part after underscore from model suffix
         if '_' in model_suffix:
-            model_part = model_suffix.split('_', 1)[1]  # 获取第一个下划线后的部分
+            model_part = model_suffix.split('_', 1)[1]  # Get part after first underscore
         else:
             model_part = model_suffix
         
-        # 组合成analysis suffix
-        analysis_suffix = f"{inout_part}_{model_part}"
+        # Combine into analysis suffix
+        analysis_suffix = f"{test_suffix}_{model_part}"
         return analysis_suffix
 
-    for network_depth, num_filters_per_layer, input_window_size in product(network_depth_list, num_filters_per_layer_list, input_window_size_list):
-
-        # 基础配置
-        test_suffix = '_SJC_funcgroup2_var2'
-        base_path = '/G/results/aim2_sjc/Models_TCN/Single_Neuron_InOut' + test_suffix
-        data_suffix = 'L5PC_NMDA'
-        model_suffix = 'NMDA_torch'
-        
-        # 动态构建analysis suffix
-        analysis_suffix = build_analysis_suffix(base_path, model_suffix)
+    # Basic configuration
+    test_suffix = '' #'_SJC_funcgroup2_var2'
+    base_path = '/G/results/aim2_sjc/Models_TCN/Single_Neuron_InOut' + test_suffix
+    data_suffix = 'L5PC_NMDA'
+    model_suffix = 'NMDA_torch'
     
-        # 数据目录
-        train_data_dir = f'{base_path}/data/{data_suffix}_train/'
-        valid_data_dir = f'{base_path}/data/{data_suffix}_valid/'
-        test_data_dir = f'{base_path}/data/{data_suffix}_test/'
+    # Dynamically build analysis suffix
+    analysis_suffix = build_analysis_suffix(test_suffix, model_suffix)
+
+    # Data directories
+    train_data_dir = f'{base_path}/data/{data_suffix}_train/'
+    valid_data_dir = f'{base_path}/data/{data_suffix}_valid/'
+    test_data_dir = f'{base_path}/data/{data_suffix}_test/'
+    
+    # 2. Main control loop
+    for network_depth, num_filters_per_layer, input_window_size in product(network_depth_list, num_filters_per_layer_list, input_window_size_list): 
         
-        # 模型和分析目录
+        # Model and analysis directories
         model_dir = f'{base_path}/models/{model_suffix}/depth_{network_depth}_filters_{num_filters_per_layer}_window_{input_window_size}/'
         analysis_dir = f'./results/3_model_analysis_plots/{analysis_suffix}/depth_{network_depth}_filters_{num_filters_per_layer}_window_{input_window_size}/'
-        
+
         os.makedirs(model_dir, exist_ok=True)
         os.makedirs(analysis_dir, exist_ok=True)
 
         print(f"\n==============================")
-        print(f"开始训练: network_depth={network_depth}, num_filters_per_layer={num_filters_per_layer}, input_window_size={input_window_size}")
-        print(f"模型保存目录: {model_dir}")
-        print(f"分析结果目录: {analysis_dir}")
+        print(f"Starting training: network_depth={network_depth}, num_filters_per_layer={num_filters_per_layer}, input_window_size={input_window_size}")
+        print(f"Model save directory: {model_dir}")
+        print(f"Analysis results directory: {analysis_dir}")
         print(f"==============================\n")
-        
-        # 3. 训练模型
+
+        # 3. Train model
         train_and_save(
             network_depth=network_depth,
             num_filters_per_layer=num_filters_per_layer,
@@ -773,22 +529,14 @@ def main():
             spike_rich_ratio=spike_rich_ratio
         )
 
-        # train_and_save_pytorch(
-        #     network_depth=network_depth,
-        #     num_filters_per_layer=num_filters_per_layer,
-        #     input_window_size=input_window_size,
-        #     num_epochs=num_epochs,
-        #     models_dir=model_dir
-        # )
-
-        # 4. 分析模型
+        # 4. Analyze model
         analyze_and_save(
             models_dir=model_dir,
             test_data_dir=test_data_dir,
             save_dir=analysis_dir
         )
 
-    print("\n所有超参数组合训练与分析已完成！") 
+    print("\nAll hyperparameter combinations training and analysis completed!") 
 
 if __name__ == "__main__":
     main()

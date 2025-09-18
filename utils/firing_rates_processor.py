@@ -1,146 +1,128 @@
 import numpy as np
 import torch
-import torch.nn as nn
-import pickle
-from utils.fit_CNN_torch import parse_sim_experiment_file, create_temporaly_convolutional_model
 
 class FiringRatesProcessor:
     """
-    专门处理firing rates数据处理的类
-    包含从加载firing rates到生成模型预测的所有数据处理功能
+    Class specialized for processing firing rates data
+    Contains data loading, preprocessing, and utility functions
     """
     
-    def __init__(self, model_path, model_params_path, time_duration_ms=300):
+    def __init__(self, time_duration_ms=300, return_torch=True):
         """
-        初始化数据处理器
+        Initialize data processor
         
         Args:
-            model_path: 训练好的模型.h5文件路径
-            model_params_path: 对应的参数.pickle文件路径
-            time_duration_ms: 时间长度，默认300ms
+            time_duration_ms: Time duration, default 300ms
+            return_torch: Whether to return torch tensors, default True
         """
-        # 解析路径，支持.h5或.pt（优先.pt）
-        self.model_path = model_path
-        pt_path = model_path.replace('.h5', '.pt') if model_path.endswith('.h5') else model_path
-        # 加载参数
-        with open(model_params_path, 'rb') as f:
-            self.model_params = pickle.load(f)
-        
-        # 提取模型架构信息
-        self.architecture_dict = self.model_params['architecture_dict']
-        self.input_window_size = self.architecture_dict['input_window_size']
-        # 重建PyTorch模型并加载权重
-        # 估算segments数量（与训练时一致：总和为exc+inh）
-        # 这里维持原先常量配置
-        self.num_segments_exc = 639
-        self.num_segments_inh = 640
+        # Basic configuration
         self.time_duration_ms = time_duration_ms
-        total_segments = self.num_segments_exc + self.num_segments_inh
-        self.model = create_temporaly_convolutional_model(
-            self.input_window_size,
-            self.num_segments_exc,
-            self.num_segments_inh,
-            self.architecture_dict['filter_sizes_per_layer'],
-            self.architecture_dict['num_filters_per_layer'],
-            self.architecture_dict['activation_function_per_layer'],
-            self.architecture_dict['l2_regularization_per_layer'],
-            self.architecture_dict['strides_per_layer'],
-            self.architecture_dict['dilation_rates_per_layer'],
-            self.architecture_dict['initializer_per_layer'],
-            use_improved_initialization=False
-        )
-        # 加载state_dict
-        try:
-            state = torch.load(pt_path, map_location='cpu')
-            self.model.load_state_dict(state)
-        except Exception as e:
-            print(f"警告：无法加载权重 {pt_path}，原因：{e}")
-        self.model.eval()
+        self.return_torch = return_torch
         
-        # segments数量（保持原逻辑常量）
-        self.num_segments_total = self.num_segments_exc + self.num_segments_inh
-        
-        print(f"FiringRatesProcessor初始化成功:")
-        print(f"  输入窗口大小: {self.input_window_size}ms")
-        print(f"  兴奋性segments: {self.num_segments_exc}")
-        print(f"  抑制性segments: {self.num_segments_inh}")
-        print(f"  总segments: {self.num_segments_total}")
+        print(f"FiringRatesProcessor initialized successfully:")
+        print(f"  Time duration: {self.time_duration_ms}ms")
+        print(f"  Return type: {'torch tensors' if return_torch else 'numpy arrays'}")
     
-    def load_init_firing_rates(self, firing_rates_path):
+    def _convert_to_return_type(self, data):
         """
-        加载初始firing rates
+        Convert data to correct return type based on self.return_torch setting
         
         Args:
-            firing_rates_path: firing rates的.npy文件路径
+            data: numpy array or torch tensor
             
         Returns:
-            firing_rates: (num_segments_total, full_time_duration) numpy数组
+            converted data
         """
-        print(f"正在加载初始firing rates: {firing_rates_path}")
-        try:
-            firing_rates = np.load(firing_rates_path)
-            print(f"  文件加载成功，形状: {firing_rates.shape}")
-            print(f"  数据类型: {firing_rates.dtype}")
-            print(f"  数值范围: [{np.min(firing_rates):.6f}, {np.max(firing_rates):.6f}]")
-            
-            # 验证数据格式
-            if len(firing_rates.shape) != 2:
-                raise ValueError(f"期望2D数组，但得到{len(firing_rates.shape)}D数组")
-            
-            num_segments, full_time = firing_rates.shape
-            if num_segments != self.num_segments_total:
-                print(f"警告：文件中的segments数量 ({num_segments}) 与模型期望不符 ({self.num_segments_total})")
-            
-            return firing_rates.astype(np.float32)
-            
-        except Exception as e:
-            print(f"加载初始firing rates时出错: {e}")
-            return None
+        if self.return_torch:
+            return data if isinstance(data, torch.Tensor) else torch.from_numpy(data)
+        else:
+            return data.detach().cpu().numpy() if isinstance(data, torch.Tensor) else data
     
-    def prepare_firing_rates_for_optimization(self, firing_rates, batch_size=1, start_time_ms=100):
+    def load_init_firing_rates(self, firing_rates_path, num_segments_total=1279):
         """
-        准备firing rates用于优化，提取后300ms数据（忽略前100ms）
+        Load initial firing rates
         
         Args:
-            firing_rates: (num_segments_total, full_time_duration) 或 (batch_size, num_segments_total, full_time_duration)
-            batch_size: 批次大小
-            start_time_ms: 开始时间，默认100ms（忽略前100ms）
+            firing_rates_path: Path to firing rates .npy file
+            num_segments_total: Expected number of segments (default 1279)
+            
+        Returns:
+            firing_rates: (num_segments_total, full_time_duration) numpy array or torch tensor
+        """
+        print(f"Loading initial firing rates: {firing_rates_path}")
+        try:
+            firing_rates = np.load(firing_rates_path)
+            print(f"  File loaded successfully, shape: {firing_rates.shape}")
+            print(f"  Data type: {firing_rates.dtype}")
+            print(f"  Value range: [{np.min(firing_rates):.6f}, {np.max(firing_rates):.6f}]")
+            
+            # Validate data format
+            if len(firing_rates.shape) != 2:
+                raise ValueError(f"Expected 2D array, but got {len(firing_rates.shape)}D array")
+            
+            num_segments, _ = firing_rates.shape
+            if num_segments != num_segments_total:
+                print(f"Warning: Segments count in file ({num_segments}) does not match expected ({num_segments_total})")
+            
+            firing_rates = firing_rates.astype(np.float32)
+            return self._convert_to_return_type(firing_rates)
+            
+        except Exception as e:
+            print(f"Error loading initial firing rates: {e}")
+            return None
+    
+    def prepare_firing_rates_for_optimization(self, firing_rates, batch_size=2, start_time_ms=100, num_segments_total=1279):
+        """
+        Prepare firing rates for optimization, extract specified time range data
+        
+        Args:
+            firing_rates: (num_segments_total, full_time_duration) or (batch_size, num_segments_total, full_time_duration)
+            batch_size: batch size
+            start_time_ms: start time, default 100ms
+            num_segments_total: Expected number of segments (default 1279)
             
         Returns:
             prepared_rates: (batch_size, num_segments_total, time_duration_ms)
         """
-        if len(firing_rates.shape) == 2:
-            # 单个样本，扩展为batch
-            firing_rates = firing_rates[np.newaxis, :, :]  # (1, num_segments, full_time)
+        # Handle input that might be torch tensor
+        is_torch_input = isinstance(firing_rates, torch.Tensor)
+        if is_torch_input:
+            firing_rates_np = firing_rates.detach().cpu().numpy()
+        else:
+            firing_rates_np = firing_rates
+            
+        if len(firing_rates_np.shape) == 2:
+            # Single sample, expand to batch
+            firing_rates_np = firing_rates_np[np.newaxis, :, :]  # (1, num_segments, full_time)
         
-        current_batch_size, num_segments, full_time = firing_rates.shape
+        current_batch_size, num_segments, full_time = firing_rates_np.shape
         
-        # 处理segments数量不匹配的问题
-        if num_segments != self.num_segments_total:
-            print(f"调整segments数量: {num_segments} -> {self.num_segments_total}")
-            if num_segments < self.num_segments_total:
-                # 如果segments不足，用零填充
-                padding_needed = self.num_segments_total - num_segments
-                padding = np.zeros((current_batch_size, padding_needed, full_time), dtype=firing_rates.dtype)
-                firing_rates = np.concatenate([firing_rates, padding], axis=1)
-                print(f"  添加了 {padding_needed} 个零填充segments")
+        # Handle segments count mismatch
+        if num_segments != num_segments_total:
+            print(f"Adjusting segments count: {num_segments} -> {num_segments_total}")
+            if num_segments < num_segments_total:
+                # If segments insufficient, pad with zeros
+                padding_needed = num_segments_total - num_segments
+                padding = np.zeros((current_batch_size, padding_needed, full_time), dtype=firing_rates_np.dtype)
+                firing_rates_np = np.concatenate([firing_rates_np, padding], axis=1)
+                print(f"  Added {padding_needed} zero-padded segments")
             else:
-                # 如果segments过多，截取前面的部分
-                firing_rates = firing_rates[:, :self.num_segments_total, :]
-                print(f"  截取前 {self.num_segments_total} 个segments")
+                # If segments too many, take the first part
+                firing_rates_np = firing_rates_np[:, :num_segments_total, :]
+                print(f"  Took first {num_segments_total} segments")
         
-        # 计算提取的时间范围
+        # Calculate extraction time range
         end_time_ms = start_time_ms + self.time_duration_ms
         
         if end_time_ms > full_time:
-            raise ValueError(f"时间范围超出数据长度：需要{end_time_ms}ms，但数据只有{full_time}ms")
+            raise ValueError(f"Time range exceeds data length: need {end_time_ms}ms, but data only has {full_time}ms")
         
-        # 提取指定时间段的数据
-        extracted_rates = firing_rates[:, :, start_time_ms:end_time_ms]
+        # Extract data for specified time period
+        extracted_rates = firing_rates_np[:, :, start_time_ms:end_time_ms]
         
-        # 如果需要更多batch，复制数据
+        # If more batches needed, copy data
         if batch_size > current_batch_size:
-            # 重复数据以达到所需的batch size
+            # Repeat data to achieve required batch size
             repeat_times = batch_size // current_batch_size
             remainder = batch_size % current_batch_size
             
@@ -151,135 +133,48 @@ class FiringRatesProcessor:
             else:
                 extracted_rates = repeated_rates
         elif batch_size < current_batch_size:
-            # 取前batch_size个样本
+            # Take first batch_size samples
             extracted_rates = extracted_rates[:batch_size, :, :]
         
         print(f"Prepare for optimization:")
-        print(f"  Original input shape: {firing_rates.shape}")
+        print(f"  Original input shape: {firing_rates_np.shape}")
         print(f"  Extracted time: {start_time_ms}-{end_time_ms}ms")
         print(f"  Extracted input shape: {extracted_rates.shape}")
         
-        return extracted_rates.astype(np.float32)
+        extracted_rates = extracted_rates.astype(np.float32)
+        return self._convert_to_return_type(extracted_rates)
     
-    def generate_background_firing_rates(self, batch_size=1):
+    def generate_background_firing_rates(self, batch_size=2, num_segments_exc=639, num_segments_inh=640):
         """
-        生成背景firing rates (泊松过程)
+        Generate background firing rates (Poisson process)
         
         Args:
-            batch_size: 批次大小
+            batch_size: batch size
+            num_segments_exc: number of excitatory segments (default 639)
+            num_segments_inh: number of inhibitory segments (default 640)
             
         Returns:
-            firing_rates: (batch_size, time_duration_ms, num_segments_total)
+            firing_rates: (batch_size, num_segments_total, time_duration_ms)
         """
-        # 为兴奋性和抑制性segments设置不同的背景firing rate
-        exc_rate = 0.01  # 兴奋性背景firing rate (1%)
-        inh_rate = 0.02  # 抑制性背景firing rate (2%)
+        # Set different background firing rates for excitatory and inhibitory segments
+        exc_rate = 0.01  # Excitatory background firing rate (1%)
+        inh_rate = 0.02  # Inhibitory background firing rate (2%)
         
-        # 生成firing rates
-        firing_rates = np.zeros((batch_size, self.time_duration_ms, self.num_segments_total))
+        num_segments_total = num_segments_exc + num_segments_inh
         
-        # 兴奋性segments
-        firing_rates[:, :, :self.num_segments_exc] = np.random.uniform(
-            0.005, 0.02, (batch_size, self.time_duration_ms, self.num_segments_exc)
+        # Generate firing rates with correct shape: (batch_size, num_segments_total, time_duration_ms)
+        firing_rates = np.zeros((batch_size, num_segments_total, self.time_duration_ms))
+        
+        # Excitatory segments
+        firing_rates[:, :num_segments_exc, :] = np.random.uniform(
+            0.005, 0.02, (batch_size, num_segments_exc, self.time_duration_ms)
         )
         
-        # 抑制性segments
-        firing_rates[:, :, self.num_segments_exc:] = np.random.uniform(
-            0.01, 0.03, (batch_size, self.time_duration_ms, self.num_segments_inh)
+        # Inhibitory segments
+        firing_rates[:, num_segments_exc:, :] = np.random.uniform(
+            0.01, 0.03, (batch_size, num_segments_inh, self.time_duration_ms)
         )
         
-        return firing_rates.astype(np.float32)
+        firing_rates = firing_rates.astype(np.float32)
+        return self._convert_to_return_type(firing_rates)
     
-    def generate_spikes_with_modification(self, firing_rates, fixed_exc_indices=None):
-        """
-        生成spikes with modification - 可复用函数
-        
-        Args:
-            firing_rates: (batch_size, num_segments_total, time_duration_ms)
-            fixed_exc_indices: 固定添加spikes的excitatory indices
-            
-        Returns:
-            spike_trains: (batch_size, num_segments_total, time_duration_ms) binary
-            fixed_exc_indices: 使用的fixed indices
-        """
-        batch_size = firing_rates.shape[0]
-        
-        # 只对前一半batch使用Poisson过程生成spikes
-        # 安全处理：去NaN/Inf并限制取值范围到[0, 0.1]
-        safe_rates = np.nan_to_num(firing_rates, nan=0.0, posinf=0.1, neginf=0.0).astype(np.float32)
-        safe_rates = np.where(np.isfinite(safe_rates), safe_rates, 0.0).astype(np.float32)
-        safe_rates = np.clip(safe_rates, 0.0, 0.1)
-        first_half_spikes = np.random.poisson(safe_rates).astype(np.float32)
-        first_half_spikes = np.clip(first_half_spikes, 0, 1)  # 限制为0或1 (binary)
-        
-        # 复制前一半到后一半，确保基础spikes完全相同
-        second_half_spikes = first_half_spikes.copy()
-        
-        # 组合完整的spike trains
-        spike_trains = np.concatenate([first_half_spikes, second_half_spikes], axis=0)
-        
-        # 如果没有指定固定的excitatory indices，随机选择三个
-        if fixed_exc_indices is None:
-            mono_syn_rnd = np.random.default_rng(42)
-            fixed_exc_indices = mono_syn_rnd.choice(self.num_segments_exc, size=3, replace=False)
-        
-        # 对后一半batch添加固定spikes (在half window size处)
-        if batch_size > 0:
-            spike_time_mono_syn = self.input_window_size // 2  # half window size时间点
-            if spike_time_mono_syn < self.time_duration_ms:
-                # 在half window size处为指定的三个excitatory segments添加spikes
-                for idx in fixed_exc_indices:
-                    spike_trains[batch_size:, idx, spike_time_mono_syn] = 1.0
-        
-        return spike_trains, fixed_exc_indices
-    
-    def process_firing_rates_to_predictions(self, firing_rates, fixed_exc_indices):
-        """
-        可复用函数：将firing rates转换为模型预测
-        
-        Args:
-            firing_rates: (batch_size, num_segments_total, time_duration_ms)
-            fixed_exc_indices: 固定的excitatory indices
-            
-        Returns:
-            spike_predictions: 模型预测的spike概率
-            spike_trains: 生成的spike trains
-        """
-        # 使用可复用函数生成spikes
-        spike_trains, _ = self.generate_spikes_with_modification(firing_rates, fixed_exc_indices)
-        
-        # 转换数据格式以匹配模型输入: (spike_batch_size, time_duration, num_segments)
-        model_input = np.transpose(spike_trains, (0, 2, 1))
-        
-        # 处理输入窗口大小
-        input_time_steps = model_input.shape[1]
-        if input_time_steps < self.input_window_size:
-            padding_needed = self.input_window_size - input_time_steps
-            padding = np.zeros((model_input.shape[0], padding_needed, model_input.shape[2]))
-            model_input = np.concatenate([padding, model_input], axis=1)
-        elif input_time_steps > self.input_window_size:
-            model_input = model_input[:, -self.input_window_size:, :]
-        
-        # 模型预测 (PyTorch)
-        # 转为(B, T, C) -> torch
-        model_input_t = torch.from_numpy(model_input.astype(np.float32))
-        with torch.no_grad():
-            pred_spike_t, _ = self.model(model_input_t)
-        spike_predictions = pred_spike_t.numpy()
-        return spike_predictions, spike_trains
-    
-    def get_model_info(self):
-        """
-        获取模型信息
-        
-        Returns:
-            dict: 包含模型基本信息的字典
-        """
-        return {
-            'input_window_size': self.input_window_size,
-            'num_segments_exc': self.num_segments_exc,
-            'num_segments_inh': self.num_segments_inh,
-            'num_segments_total': self.num_segments_total,
-            'time_duration_ms': self.time_duration_ms,
-            'model_path': self.model_path
-        }

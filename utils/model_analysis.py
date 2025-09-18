@@ -15,17 +15,17 @@ from utils.fit_CNN_torch import create_temporaly_convolutional_model, parse_sim_
 
 def load_test_data(test_file):
     """
-    加载测试数据 - 修复版本
+    Load test data - fixed version
     """
     try:
-        # 解析测试文件
+        # Parse test file
         X_test, y_spike_test, y_soma_test = parse_sim_experiment_file(test_file)
         
-        # 调整数据格式以匹配模型输入
-        # 模型期望的输入格式：(batch_size, window_size, num_segments)
-        # 但parse_sim_experiment_file返回：(num_segments, time_steps, num_simulations)
+        # Adjust data format to match model input
+        # Model expects input format: (batch_size, window_size, num_segments)
+        # But parse_sim_experiment_file returns: (num_segments, time_steps, num_simulations)
         
-        # 转置数据以匹配模型输入格式
+        # Transpose data to match model input format
         X_test = np.transpose(X_test, axes=[2, 1, 0])  # (num_simulations, time_steps, num_segments)
         y_spike_test = y_spike_test.T[:, :, np.newaxis]  # (num_simulations, time_steps, 1)
         y_soma_test = y_soma_test.T[:, :, np.newaxis]   # (num_simulations, time_steps, 1)
@@ -38,18 +38,18 @@ def load_test_data(test_file):
 
 def calculate_auc_metrics(model_path, test_data_dir):
     """
-    计算模型的AUC指标 - 修复版本（PyTorch）
+    Calculate model AUC metrics - fixed version (PyTorch)
     """
     try:
-        # 设备（AUC计算默认CPU足够）
+        # Device (CPU is sufficient for AUC calculation)
         device = torch.device('cpu')
 
-        # 从pickle元数据中恢复架构
+        # Restore architecture from pickle metadata
         with open(model_path, 'rb') as f:
             meta = pickle.load(f)
         arch = meta['architecture_dict']
 
-        # 恢复必要的超参
+        # Restore necessary hyperparameters
         input_window_size = arch['input_window_size']
         filter_sizes_per_layer = arch['filter_sizes_per_layer']
         num_filters_per_layer = arch['num_filters_per_layer']
@@ -59,7 +59,7 @@ def calculate_auc_metrics(model_path, test_data_dir):
         dilation_rates_per_layer = arch['dilation_rates_per_layer']
         initializer_per_layer = arch['initializer_per_layer']
 
-        # 需要知道segments数量以构建模型；从测试文件读取一份数据获取num_segments
+        # Need to know number of segments to build model; read one test file to get num_segments
         test_files_probe = glob.glob(os.path.join(test_data_dir, '*.p'))
         if not test_files_probe:
             print(f"No test files found in {test_data_dir}")
@@ -67,11 +67,11 @@ def calculate_auc_metrics(model_path, test_data_dir):
         X_probe, _, _ = parse_sim_experiment_file(test_files_probe[0])
         # X_probe: (num_segments, time_steps, num_simulations)
         total_segments = X_probe.shape[0]
-        # 假设exc/inh均分或近似，直接拆分为两半（与训练阶段使用的相同总和即可）
+        # Assume exc/inh are roughly equal, split in half (same total as used in training)
         num_segments_exc = total_segments // 2
         num_segments_inh = total_segments - num_segments_exc
 
-        # 构建PyTorch模型并加载权重
+        # Build PyTorch model and load weights
         model_torch = create_temporaly_convolutional_model(
             input_window_size,
             num_segments_exc,
@@ -86,7 +86,7 @@ def calculate_auc_metrics(model_path, test_data_dir):
             use_improved_initialization=False
         ).to(device)
 
-        # 加载state_dict（与pickle同名的.pt文件）
+        # Load state_dict (same name as pickle but .pt file)
         pt_path = model_path.replace('.pickle', '.pt')
         if not os.path.exists(pt_path):
             print(f"Model weights not found: {pt_path}")
@@ -95,17 +95,17 @@ def calculate_auc_metrics(model_path, test_data_dir):
         model_torch.load_state_dict(state)
         model_torch.eval()
          
-        # 加载测试数据
+        # Load test data
         test_files = glob.glob(os.path.join(test_data_dir, '*.p'))
         if not test_files:
             print(f"No test files found in {test_data_dir}")
             return None
          
-        # 使用第一个测试文件进行评估
+        # Use first test file for evaluation
         test_file = test_files[0]
         print(f"Using test file: {test_file}")
          
-        # 加载测试数据
+        # Load test data
         X_test, y_spike_test, y_soma_test = load_test_data(test_file)
          
         if X_test is None:
@@ -114,47 +114,47 @@ def calculate_auc_metrics(model_path, test_data_dir):
          
         print(f"Test data shape: X={X_test.shape}, y_spike={y_spike_test.shape}, y_soma={y_soma_test.shape}")
          
-        # 窗口与特征
+        # Window and features
         num_segments = X_test.shape[2]
         print(f"Model expects input shape: (None, {input_window_size}, {num_segments})")
         print(f"Input window size: {input_window_size}, num_segments: {num_segments}")
          
-        # 创建滑动窗口来生成测试样本
-        batch_size = 32  # 可以根据内存调整
+        # Create sliding windows to generate test samples
+        batch_size = 32  # Can be adjusted based on memory
         all_predictions_spike = []
         all_predictions_soma = []
         all_targets_spike = []
         all_targets_soma = []
          
-        # 对每个模拟进行预测
-        for sim_idx in range(min(10, X_test.shape[0])):  # 限制模拟数量以节省时间
+        # Predict for each simulation
+        for sim_idx in range(min(10, X_test.shape[0])):  # Limit simulation count to save time
             sim_data = X_test[sim_idx]  # (time_steps, num_segments)
             sim_spike = y_spike_test[sim_idx]  # (time_steps, 1)
             sim_soma = y_soma_test[sim_idx]   # (time_steps, 1)
              
-            # 创建滑动窗口
+            # Create sliding windows
             for start_idx in range(0, sim_data.shape[0] - input_window_size + 1, input_window_size // 2):
                 end_idx = start_idx + input_window_size
                  
-                # 提取窗口数据
+                # Extract window data
                 window_data = sim_data[start_idx:end_idx]  # (window_size, num_segments)
                 window_spike = sim_spike[start_idx:end_idx]  # (window_size, 1)
                 window_soma = sim_soma[start_idx:end_idx]   # (window_size, 1)
                  
-                # 转为Tensor并预测
+                # Convert to Tensor and predict
                 window_tensor = torch.from_numpy(window_data.astype(np.float32))[None, ...].to(device)  # (1, T, C)
                 with torch.no_grad():
                     pred_spike_t, pred_soma_t = model_torch(window_tensor)
                 pred_spike = pred_spike_t.cpu().numpy()
                 pred_soma = pred_soma_t.cpu().numpy()
                  
-                # 收集结果
+                # Collect results
                 all_predictions_spike.append(pred_spike.flatten())
                 all_predictions_soma.append(pred_soma.flatten())
                 all_targets_spike.append(window_spike.flatten())
                 all_targets_soma.append(window_soma.flatten())
          
-        # 合并所有预测结果
+        # Merge all prediction results
         if not all_predictions_spike:
             print("No predictions generated")
             return None
@@ -166,7 +166,7 @@ def calculate_auc_metrics(model_path, test_data_dir):
         
         print(f"Final shapes: pred_spike={y_pred_spike_flat.shape}, target_spike={y_spike_flat.shape}")
         
-        # 计算AUC指标
+        # Calculate AUC metrics
         auc_metrics = {}
         
         # 1. ROC AUC for spike prediction
@@ -183,14 +183,14 @@ def calculate_auc_metrics(model_path, test_data_dir):
             print(f"Error calculating PR AUC: {e}")
             auc_metrics['pr_auc_spike'] = 0.0
         
-        # 3. 计算不同阈值下的AUC
+        # 3. Calculate AUC at different thresholds
         thresholds = np.arange(0.1, 1.0, 0.1)
         auc_at_thresholds = []
         
         for threshold in thresholds:
             try:
                 y_pred_binary = (y_pred_spike_flat > threshold).astype(int)
-                if len(np.unique(y_pred_binary)) > 1:  # 确保有正负样本
+                if len(np.unique(y_pred_binary)) > 1:  # Ensure both positive and negative samples
                     auc_at_thresholds.append(roc_auc_score(y_spike_flat, y_pred_binary))
                 else:
                     auc_at_thresholds.append(0.5)
@@ -200,7 +200,7 @@ def calculate_auc_metrics(model_path, test_data_dir):
         auc_metrics['auc_at_thresholds'] = auc_at_thresholds
         auc_metrics['mean_auc_thresholds'] = np.mean(auc_at_thresholds)
         
-        # 4. 计算somatic voltage的相关系数
+        # 4. Calculate somatic voltage correlation coefficient
         try:
             auc_metrics['soma_correlation'] = np.corrcoef(y_soma_flat, y_pred_soma_flat)[0, 1]
             if np.isnan(auc_metrics['soma_correlation']):
@@ -218,7 +218,7 @@ def calculate_auc_metrics(model_path, test_data_dir):
 
 def load_model_results(models_dir, test_data_dir):
     """
-    加载所有保存的模型结果，包括AUC评估
+    Load all saved model results, including AUC evaluation
     """
     model_pickles = glob.glob(os.path.join(models_dir, '*.pickle'))
     results = []
@@ -228,22 +228,22 @@ def load_model_results(models_dir, test_data_dir):
             with open(pkl, 'rb') as f:
                 data = pickle.load(f)
             
-            # 提取基本信息
+            # Extract basic information
             training_history = data['training_history_dict']
             
-            # 计算关键指标
+            # Calculate key metrics
             min_val_loss = min(training_history['val_loss'])
             min_val_spikes_loss = min(training_history['val_spikes_loss'])
             min_val_somatic_loss = min(training_history['val_somatic_loss'])
             
-            # 找到最小loss对应的epoch
+            # Find epoch with minimum loss
             min_val_loss_epoch = np.argmin(training_history['val_loss'])
             min_val_spikes_loss_epoch = np.argmin(training_history['val_spikes_loss'])
             
-            # 提取模型文件名（不含路径）
+            # Extract model filename (without path)
             model_name = os.path.basename(pkl)
             
-            # 计算AUC指标
+            # Calculate AUC metrics
             auc_metrics = calculate_auc_metrics(pkl, test_data_dir)
             
             results.append({
@@ -267,11 +267,11 @@ def load_model_results(models_dir, test_data_dir):
 
 def plot_training_curves(results, save_dir):
     """
-    绘制训练曲线
+    Plot training curves
     """
     os.makedirs(save_dir, exist_ok=True)
     
-    # 设置中文字体
+    # Set font for Chinese characters
     plt.rcParams['font.sans-serif'] = ['SimHei', 'DejaVu Sans']
     plt.rcParams['axes.unicode_minus'] = False
     
@@ -279,11 +279,11 @@ def plot_training_curves(results, save_dir):
         history = result['training_history']
         model_name = result['model_name'].replace('.pickle', '')
         
-        # 创建子图
+        # Create subplots
         fig, axes = plt.subplots(2, 2, figsize=(15, 10))
         fig.suptitle(f'Training Curves - {model_name}', fontsize=16)
         
-        # 1. 总Loss
+        # 1. Total Loss
         axes[0, 0].plot(history['loss'], label='Training Loss', alpha=0.7)
         axes[0, 0].plot(history['val_loss'], label='Validation Loss', alpha=0.7)
         axes[0, 0].set_title('Total Loss')
@@ -325,21 +325,21 @@ def plot_training_curves(results, save_dir):
 
 def plot_model_comparison(results, save_dir):
     """
-    绘制模型比较图
+    Plot model comparison charts
     """
     os.makedirs(save_dir, exist_ok=True)
     
-    # 创建DataFrame用于分析
+    # Create DataFrame for analysis
     df = pd.DataFrame(results)
     
-    # 1. 模型性能比较柱状图
+    # 1. Model performance comparison bar charts
     fig, axes = plt.subplots(2, 2, figsize=(15, 10))
     fig.suptitle('Model Performance Comparison', fontsize=16)
     
-    # 按验证集总loss排序
+    # Sort by validation total loss
     df_sorted = df.sort_values('min_val_loss')
     
-    # 总Loss比较
+    # Total Loss comparison
     axes[0, 0].bar(range(len(df_sorted)), df_sorted['min_val_loss'])
     axes[0, 0].set_title('Minimum Validation Total Loss')
     axes[0, 0].set_xlabel('Model Index')
@@ -348,7 +348,7 @@ def plot_model_comparison(results, save_dir):
     axes[0, 0].set_xticklabels([f'M{i}' for i in range(len(df_sorted))], rotation=45)
     axes[0, 0].grid(True, alpha=0.3)
     
-    # Spike Loss比较
+    # Spike Loss comparison
     axes[0, 1].bar(range(len(df_sorted)), df_sorted['min_val_spikes_loss'])
     axes[0, 1].set_title('Minimum Validation Spike Loss')
     axes[0, 1].set_xlabel('Model Index')
@@ -357,7 +357,7 @@ def plot_model_comparison(results, save_dir):
     axes[0, 1].set_xticklabels([f'M{i}' for i in range(len(df_sorted))], rotation=45)
     axes[0, 1].grid(True, alpha=0.3)
     
-    # Somatic Loss比较
+    # Somatic Loss comparison
     axes[1, 0].bar(range(len(df_sorted)), df_sorted['min_val_somatic_loss'])
     axes[1, 0].set_title('Minimum Validation Somatic Loss')
     axes[1, 0].set_xlabel('Model Index')
@@ -366,7 +366,7 @@ def plot_model_comparison(results, save_dir):
     axes[1, 0].set_xticklabels([f'M{i}' for i in range(len(df_sorted))], rotation=45)
     axes[1, 0].grid(True, alpha=0.3)
     
-    # 最佳epoch比较
+    # Best epoch comparison
     axes[1, 1].bar(range(len(df_sorted)), df_sorted['min_val_loss_epoch'])
     axes[1, 1].set_title('Best Epoch (Min Val Loss)')
     axes[1, 1].set_xlabel('Model Index')
@@ -379,7 +379,7 @@ def plot_model_comparison(results, save_dir):
     plt.savefig(os.path.join(save_dir, 'model_comparison.png'), dpi=300, bbox_inches='tight')
     plt.close()
     
-    # 2. 散点图：Spike Loss vs Somatic Loss
+    # 2. Scatter plot: Spike Loss vs Somatic Loss
     plt.figure(figsize=(10, 8))
     plt.scatter(df['min_val_spikes_loss'], df['min_val_somatic_loss'], alpha=0.7, s=100)
     plt.xlabel('Minimum Validation Spike Loss')
@@ -387,7 +387,7 @@ def plot_model_comparison(results, save_dir):
     plt.title('Spike Loss vs Somatic Loss')
     plt.grid(True, alpha=0.3)
     
-    # 添加模型标签
+    # Add model labels
     for i, row in df.iterrows():
         plt.annotate(f'M{i}', (row['min_val_spikes_loss'], row['min_val_somatic_loss']), 
                     xytext=(5, 5), textcoords='offset points', fontsize=8)
@@ -397,7 +397,7 @@ def plot_model_comparison(results, save_dir):
 
 def analyze_training_stability(results, save_dir):
     """
-    分析训练稳定性
+    Analyze training stability
     """
     os.makedirs(save_dir, exist_ok=True)
     
@@ -407,25 +407,25 @@ def analyze_training_stability(results, save_dir):
     for i, result in enumerate(results):
         history = result['training_history']
         
-        # 计算训练稳定性指标
-        train_loss_std = np.std(history['loss'][-20:])  # 最后20个epoch的标准差
+        # Calculate training stability metrics
+        train_loss_std = np.std(history['loss'][-20:])  # Standard deviation of last 20 epochs
         val_loss_std = np.std(history['val_loss'][-20:])
         
-        # 1. 训练loss的波动
+        # 1. Training loss fluctuations
         axes[0, 0].plot(history['loss'][-50:], alpha=0.7, label=f'Model {i}')
         axes[0, 0].set_title('Training Loss (Last 50 Epochs)')
         axes[0, 0].set_xlabel('Epoch')
         axes[0, 0].set_ylabel('Loss')
         axes[0, 0].grid(True, alpha=0.3)
         
-        # 2. 验证loss的波动
+        # 2. Validation loss fluctuations
         axes[0, 1].plot(history['val_loss'][-50:], alpha=0.7, label=f'Model {i}')
         axes[0, 1].set_title('Validation Loss (Last 50 Epochs)')
         axes[0, 1].set_xlabel('Epoch')
         axes[0, 1].set_ylabel('Loss')
         axes[0, 1].grid(True, alpha=0.3)
         
-        # 3. 过拟合分析
+        # 3. Overfitting analysis
         train_val_diff = np.array(history['loss']) - np.array(history['val_loss'])
         axes[1, 0].plot(train_val_diff[-50:], alpha=0.7, label=f'Model {i}')
         axes[1, 0].set_title('Train-Val Loss Difference (Last 50 Epochs)')
@@ -434,14 +434,14 @@ def analyze_training_stability(results, save_dir):
         axes[1, 0].grid(True, alpha=0.3)
         axes[1, 0].axhline(y=0, color='black', linestyle='--', alpha=0.5)
         
-        # 4. 收敛性分析
+        # 4. Convergence analysis
         axes[1, 1].plot(history['val_loss'], alpha=0.7, label=f'Model {i}')
         axes[1, 1].set_title('Full Validation Loss')
         axes[1, 1].set_xlabel('Epoch')
         axes[1, 1].set_ylabel('Loss')
         axes[1, 1].grid(True, alpha=0.3)
     
-    # 添加图例
+    # Add legends
     for ax in axes.flat:
         ax.legend()
     

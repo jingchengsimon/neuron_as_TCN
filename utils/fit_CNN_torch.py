@@ -1,22 +1,12 @@
 import numpy as np
-import pandas as pd
-import glob
 import time
 import sys
-import os
 import pickle
-import matplotlib.pyplot as plt
-import seaborn as sns
-from pathlib import Path
 
-# 移除TensorFlow/Keras相关依赖，改为使用PyTorch
+# Remove TensorFlow/Keras dependencies, use PyTorch instead
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torch.optim as optim
-
-from sklearn import decomposition
-from datetime import datetime  
 
 # some fixes for python 3
 if sys.version_info[0]<3:
@@ -27,15 +17,15 @@ else:
     
 
 def dict2bin(row_inds_spike_times_map, num_segments, sim_duration_ms, syn_type, data_type=None):
-    
-    # 在循环开始前对字典的key进行批量操作
+    """Convert dictionary of spike times to binary spike matrix"""
+    # Batch process dictionary keys before the loop
     if syn_type == 'exc' and (data_type or '').lower() == 'sjc':
-        # 对兴奋性突触字典，在SJC数据时将所有key减1（从1-639变为0-638）
+        # For excitatory synapse dictionary, subtract 1 from all keys in SJC data (from 1-639 to 0-638)
         adjusted_dict = {}
         for key, value in row_inds_spike_times_map.items():
             adjusted_dict[key - 1] = value
         row_inds_spike_times_map = adjusted_dict
-    # 对于inh类型，不需要修改key
+    # For inh type, no need to modify keys
 
     bin_spikes_matrix = np.zeros((num_segments, sim_duration_ms), dtype='bool')            
     for row_ind in row_inds_spike_times_map.keys():
@@ -44,6 +34,35 @@ def dict2bin(row_inds_spike_times_map, num_segments, sim_duration_ms, syn_type, 
     
     return bin_spikes_matrix
 
+def bin2dict(bin_spikes_matrix):
+    """Convert binary spike matrix to dictionary format"""
+    spike_row_inds, spike_times = np.nonzero(bin_spikes_matrix)
+    row_inds_spike_times_map = {}
+    for row_ind, syn_time in zip(spike_row_inds, spike_times):
+        if row_ind not in row_inds_spike_times_map:
+            row_inds_spike_times_map[row_ind] = []
+            row_inds_spike_times_map[row_ind].append(syn_time)
+    return row_inds_spike_times_map
+
+def parse_multiple_sim_experiment_files(sim_experiment_files):
+    """Parse multiple simulation experiment files"""
+    if not sim_experiment_files:
+        raise ValueError('No test files found. Please check test_data_dir and glob pattern.')
+    
+    data_list = []
+    for sim_experiment_file in sim_experiment_files:
+        X_curr, y_spike_curr, y_soma_curr = parse_sim_experiment_file(sim_experiment_file)
+        data_list.append((X_curr, y_spike_curr, y_soma_curr))
+    
+    if not data_list:
+        raise ValueError('Failed to assemble test data. Parsed zero files.')
+    
+    # Merge all data
+    X = np.dstack([data[0] for data in data_list])
+    y_spike = np.hstack([data[1] for data in data_list])
+    y_soma = np.hstack([data[2] for data in data_list])
+    
+    return X, y_spike, y_soma
 
 def parse_sim_experiment_file(sim_experiment_file, print_logs=False):
     
@@ -57,11 +76,11 @@ def parse_sim_experiment_file(sim_experiment_file, print_logs=False):
     else:
         experiment_dict = pickle.load(open(sim_experiment_file, "rb" ),encoding='latin1')
     
-    # detect data type from full path (not only basename)
+    # Detect data type from full path (not only basename)
     path_lower = str(sim_experiment_file).lower()
     data_type = 'sjc' if 'sjc' in path_lower else 'original'
     
-    # gather params
+    # Gather params
     num_simulations = len(experiment_dict['Results']['listOfSingleSimulationDicts'])
     if 'allSegmentsType' in experiment_dict['Params']: # model_original
         num_segments_exc  = len(experiment_dict['Params']['allSegmentsType'])
@@ -77,12 +96,12 @@ def parse_sim_experiment_file(sim_experiment_file, print_logs=False):
     num_inh_synapses = num_segments_inh
     num_synapses = num_ex_synapses + num_inh_synapses
     
-    # collect X, y_spike, y_soma
+    # Collect X, y_spike, y_soma
     X = np.zeros((num_synapses, sim_duration_ms, num_simulations), dtype='bool')
     y_spike = np.zeros((sim_duration_ms,num_simulations))
     y_soma  = np.zeros((sim_duration_ms,num_simulations))
     
-    # go over all simulations in the experiment and collect their results
+    # Go over all simulations in the experiment and collect their results
     for k, sim_dict in enumerate(experiment_dict['Results']['listOfSingleSimulationDicts']):
         X_ex  = dict2bin(sim_dict['exInputSpikeTimes'], num_segments_exc, sim_duration_ms, 'exc', data_type)
         X_inh = dict2bin(sim_dict['inhInputSpikeTimes'], num_segments_inh, sim_duration_ms, 'inh', data_type)
@@ -101,8 +120,8 @@ def parse_sim_experiment_file(sim_experiment_file, print_logs=False):
 
 class CausalConv1d(nn.Module):
     """
-    因果卷积：仅在左侧进行padding，保证输出time维度与输入一致（stride=1时）。
-    注意：当stride>1时，输出会按stride下采样。
+    Causal convolution: only pad on the left side, ensuring output time dimension matches input (when stride=1).
+    Note: when stride>1, output will be downsampled by stride.
     """
     def __init__(self, in_channels, out_channels, kernel_size, stride=1, dilation=1, bias=True):
         super().__init__()
@@ -115,23 +134,21 @@ class CausalConv1d(nn.Module):
     def forward(self, x):
         # x: (B, C, T)
         pad_left = (self.kernel_size - 1) * self.dilation
-        x_padded = F.pad(x, (pad_left, 0))  # 仅左侧padding
-        y = self.conv(x_padded)
-        return y
+        x_padded = F.pad(x, (pad_left, 0))  # Only left padding
+        return self.conv(x_padded)
 
 class TCNModel(nn.Module):
     """
-    PyTorch版的时间卷积网络模型。
-    维持与原模型相同的层次逻辑：
-    - 若干层Conv1d(因果卷积) + BatchNorm1d + 激活
-    - 两个输出头：spikes(sigmoid) 与 somatic(linear)
-    输入: (batch, time, channels) 以与原数据生成器保持一致，然后内部转换为 (batch, channels, time)
-    输出: spikes (batch, time, 1), somatic (batch, time, 1)
+    PyTorch version of the Temporal Convolutional Network model.
+    Maintains the same layer logic as the original model:
+    - Several Conv1d (causal convolution) + BatchNorm1d + activation layers
+    - Two output heads: spikes (sigmoid) and somatic (linear)
+    Input: (batch, time, channels) to be consistent with the original data generator, then internally converted to (batch, channels, time)
+    Output: spikes (batch, time, 1), somatic (batch, time, 1)
     """
     def __init__(self, max_input_window_size, num_segments_exc, num_segments_inh, 
-                 filter_sizes_per_layer, num_filters_per_layer, activation_function_per_layer,
-                 l2_regularization_per_layer, strides_per_layer, dilation_rates_per_layer,
-                 initializer_per_layer, use_improved_initialization=False):
+                 filter_sizes_per_layer, num_filters_per_layer, activation_function_per_layer, strides_per_layer, 
+                 dilation_rates_per_layer, initializer_per_layer, use_improved_initialization=False):
         super().__init__()
         
         self.input_window_size = max_input_window_size
@@ -139,7 +156,7 @@ class TCNModel(nn.Module):
         layers = []
         current_channels = in_channels
         
-        # 激活函数映射
+        # Activation function mapping
         def get_activation(name):
             if name == 'relu':
                 return nn.ReLU(inplace=True)
@@ -153,20 +170,20 @@ class TCNModel(nn.Module):
             num_filters   = num_filters_per_layer[k]
             filter_size   = filter_sizes_per_layer[k]
             activation    = activation_function_per_layer[k]
-            l2_reg        = l2_regularization_per_layer[k]
             stride        = strides_per_layer[k]
             dilation_rate = dilation_rates_per_layer[k]
             initializer   = initializer_per_layer[k]
             
-            # 使用因果卷积：仅左侧padding，保持长度
+            # Use causal convolution: only left padding, maintain length
             conv = CausalConv1d(in_channels=current_channels, out_channels=num_filters,
                                 kernel_size=filter_size, stride=stride, dilation=dilation_rate, bias=True)
             
-            # 初始化
+            # Initialize
             if isinstance(initializer, (int, float)):
                 nn.init.trunc_normal_(conv.conv.weight, std=initializer)
             else:
                 nn.init.kaiming_normal_(conv.conv.weight)
+
             if conv.conv.bias is not None:
                 nn.init.zeros_(conv.conv.bias)
             
@@ -177,7 +194,7 @@ class TCNModel(nn.Module):
         
         self.tcn = nn.Sequential(*layers)
         
-        # 输出层
+        # Output layer
         if use_improved_initialization:
             spike_weight_init_std = 0.01
             spike_bias_init_val = 0.0
@@ -204,7 +221,7 @@ class TCNModel(nn.Module):
         y = self.tcn(x)
         spikes = torch.sigmoid(self.spikes_head(y))   # (B, 1, T)
         soma   = self.soma_head(y)                    # (B, 1, T)
-        # 转回 (B, T, 1)
+        # Convert back to (B, T, 1)
         spikes = spikes.permute(0, 2, 1)
         soma   = soma.permute(0, 2, 1)
         return spikes, soma
@@ -213,16 +230,15 @@ class TCNModel(nn.Module):
 def create_temporaly_convolutional_model(max_input_window_size, num_segments_exc, num_segments_inh, filter_sizes_per_layer,
                                                                                              num_filters_per_layer,
                                                                                              activation_function_per_layer,
-                                                                                             l2_regularization_per_layer,
                                                                                              strides_per_layer,
                                                                                              dilation_rates_per_layer,
                                                                                              initializer_per_layer,
                                                                                              use_improved_initialization=False):
     """
-    创建时间卷积网络模型（PyTorch实现）。
-    保持函数名与参数不变，返回PyTorch的nn.Module实例。
+    Create temporal convolutional network model (PyTorch implementation).
+    Keep function name and parameters unchanged, return PyTorch nn.Module instance.
     """
-    print("使用PyTorch实现的TCN模型...")
+    print("Using PyTorch implemented TCN model...")
     model = TCNModel(
         max_input_window_size=max_input_window_size,
         num_segments_exc=num_segments_exc,
@@ -230,7 +246,6 @@ def create_temporaly_convolutional_model(max_input_window_size, num_segments_exc
         filter_sizes_per_layer=filter_sizes_per_layer,
         num_filters_per_layer=num_filters_per_layer,
         activation_function_per_layer=activation_function_per_layer,
-        l2_regularization_per_layer=l2_regularization_per_layer,
         strides_per_layer=strides_per_layer,
         dilation_rates_per_layer=dilation_rates_per_layer,
         initializer_per_layer=initializer_per_layer,
@@ -249,22 +264,22 @@ class SimulationDataGenerator:
                  ignore_time_from_start=500, y_train_soma_bias=-67.7, y_soma_threshold=-55.0):
         """
         Args:
-            use_improved_sampling: 是否使用改进的数据采样策略
-                False: 使用原有随机采样
-                True: 优先选择包含spike的时间窗口
-            spike_rich_ratio: 包含spike的样本比例 (仅在use_improved_sampling=True时有效)
+            use_improved_sampling: Whether to use improved data sampling strategy
+                False: Use original random sampling
+                True: Prioritize time windows containing spikes
+            spike_rich_ratio: Ratio of samples containing spikes (only effective when use_improved_sampling=True)
         """
         'data generator initialization'
         
         self.sim_experiment_files = sim_experiment_files
         
-        # 检查文件数量，确保num_files_per_epoch不超过实际可用的文件数量
+        # Check file count, ensure num_files_per_epoch doesn't exceed available files
         if len(self.sim_experiment_files) == 0:
-            raise ValueError(f"没有找到任何实验文件")
+            raise ValueError(f"No experiment files found")
         
         if num_files_per_epoch > len(self.sim_experiment_files):
-            print(f"警告: 请求的num_files_per_epoch ({num_files_per_epoch}) 超过了可用文件数量 ({len(self.sim_experiment_files)})")
-            print(f"将num_files_per_epoch调整为 {len(self.sim_experiment_files)}")
+            print(f"Warning: Requested num_files_per_epoch ({num_files_per_epoch}) exceeds available file count ({len(self.sim_experiment_files)})")
+            print(f"Adjusting num_files_per_epoch to {len(self.sim_experiment_files)}")
             num_files_per_epoch = len(self.sim_experiment_files)
         
         self.num_files_per_epoch = num_files_per_epoch
@@ -302,9 +317,9 @@ class SimulationDataGenerator:
         print('num batches per file = %d. coming from (%dx%d),(%dx%d)' %(self.batches_per_file, self.num_simulations_per_file,
                                                                          self.sim_duration_ms, self.batch_size, self.window_size_ms))
         if self.use_improved_sampling:
-            print('使用改进的数据采样策略: spike-rich比例 = %.1f%%' %(self.spike_rich_ratio * 100))
+            print('Using improved data sampling strategy: spike-rich ratio = %.1f%%' %(self.spike_rich_ratio * 100))
         else:
-            print('使用原有随机采样策略')
+            print('Using original random sampling strategy')
         print('-------------------------------------------------------------------------')
 
     def __len__(self):
@@ -317,11 +332,11 @@ class SimulationDataGenerator:
         if ((batch_ind_within_epoch + 1) % self.batches_per_file) == 0:
             self.load_new_file()
             
-        # 根据配置选择不同的采样策略
+        # Choose different sampling strategies based on configuration
         if self.use_improved_sampling:
             selected_sim_inds, selected_time_inds = self._select_balanced_windows()
         else:
-            # 原有随机采样策略
+            # Original random sampling strategy
             selected_sim_inds = np.random.choice(range(self.num_simulations_per_file), size=self.batch_size, replace=True)
             sampling_start_time = max(self.ignore_time_from_start, self.window_size_ms)
             selected_time_inds = np.random.choice(range(sampling_start_time, self.sim_duration_ms), size=self.batch_size, replace=False)
@@ -336,7 +351,7 @@ class SimulationDataGenerator:
             y_spike_batch[k,:,:] = self.y_spike[sim_ind, win_time - self.window_size_ms:win_time,:]
             y_soma_batch[k,:,:]  = self.y_soma[sim_ind, win_time - self.window_size_ms:win_time,:]
         
-        # 转为torch.Tensor，便于直接喂给PyTorch模型
+        # Convert to torch.Tensor for direct feeding to PyTorch model
         X_batch_t       = torch.from_numpy(X_batch)           # (B, T, C)
         y_spike_batch_t = torch.from_numpy(y_spike_batch)     # (B, T, 1)
         y_soma_batch_t  = torch.from_numpy(y_soma_batch)      # (B, T, 1)
@@ -351,33 +366,33 @@ class SimulationDataGenerator:
         return (X_batch_t, [y_spike_batch_t, y_soma_batch_t])
 
     def _select_balanced_windows(self):
-        """改进的采样策略：优先选择包含spike的时间窗口"""
+        """Improved sampling strategy: prioritize time windows containing spikes"""
         num_spike_rich = int(self.batch_size * self.spike_rich_ratio)
         num_random = self.batch_size - num_spike_rich
         
-        # 1. 选择包含spike的时间窗口
+        # 1. Select time windows containing spikes
         spike_rich_windows = []
         sampling_end_time = max(self.ignore_time_from_start, self.window_size_ms)
         for sim_ind in range(self.num_simulations_per_file):
             spike_times = self.y_spike[sim_ind, :, 0]
-            if np.sum(spike_times) > 0:  # 如果这个模拟包含spikes
-                # 选择以spike为中心的时间窗口
+            if np.sum(spike_times) > 0:  # If this simulation contains spikes
+                # Select time windows centered on spikes
                 for spike_time in np.where(spike_times)[0]:
-                    # 计算窗口结束时间（与 __getitem__ 保持一致，win_time 为右闭切片的上界）
+                    # Calculate window end time (consistent with __getitem__, win_time is right-closed slice upper bound)
                     end_time = spike_time + self.window_size_ms // 2
                     start_time = end_time - self.window_size_ms
-                    # 强约束：win_time >= ignore_time_from_start，且窗口完整落在 [0, sim_duration)
+                    # Strong constraint: win_time >= ignore_time_from_start, and window completely falls within [0, sim_duration)
                     if (end_time >= sampling_end_time and
                         end_time < self.sim_duration_ms and
                         start_time >= 0):
                         spike_rich_windows.append((sim_ind, end_time))
         
-        # 如果spike-rich窗口不够，重复一些
+        # If spike-rich windows are insufficient, repeat some
         if len(spike_rich_windows) > 0 and len(spike_rich_windows) < num_spike_rich:
             repeat_times = (num_spike_rich // len(spike_rich_windows)) + 1
             spike_rich_windows = np.tile(spike_rich_windows, (repeat_times, 1))
         
-        # 随机选择spike-rich窗口
+        # Randomly select spike-rich windows
         if len(spike_rich_windows) > 0:
             selected_spike_rich = np.random.choice(len(spike_rich_windows), 
                                                  size=min(num_spike_rich, len(spike_rich_windows)), 
@@ -386,11 +401,11 @@ class SimulationDataGenerator:
         else:
             selected_wins_spike_rich = []
         
-        # 2. 补充随机窗口
+        # 2. Supplement with random windows
         selected_wins_random = []
         available_times = list(range(sampling_end_time, self.sim_duration_ms))
         
-        # 避免与spike-rich窗口重叠
+        # Avoid overlap with spike-rich windows
         for sim_ind, end_time in selected_wins_spike_rich:
             for t in range(max(sampling_end_time, end_time - self.window_size_ms), 
                           min(self.sim_duration_ms, end_time + self.window_size_ms)):
@@ -402,14 +417,14 @@ class SimulationDataGenerator:
             selected_sim_inds_random = np.random.choice(range(self.num_simulations_per_file), size=num_random, replace=True)
             selected_wins_random = list(zip(selected_sim_inds_random, selected_end_time_inds_random))
         else:
-            # 如果可用时间不够，允许重复
+            # If available times are insufficient, allow repetition
             selected_end_time_inds_random = np.random.choice(available_times, size=num_random, replace=True)
             selected_sim_inds_random = np.random.choice(range(self.num_simulations_per_file), size=num_random, replace=True)
             selected_wins_random = list(zip(selected_sim_inds_random, selected_end_time_inds_random))
         
-        # 3. 合并并返回
+        # 3. Combine and return
         all_windows = selected_wins_spike_rich + selected_wins_random
-        np.random.shuffle(all_windows)  # 随机打乱顺序
+        np.random.shuffle(all_windows)  # Randomly shuffle order
         
         selected_sim_inds = [w[0] for w in all_windows]
         selected_end_time_inds = [w[1] for w in all_windows]
