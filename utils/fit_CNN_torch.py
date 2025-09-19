@@ -238,7 +238,7 @@ def create_temporaly_convolutional_model(max_input_window_size, num_segments_exc
     Create temporal convolutional network model (PyTorch implementation).
     Keep function name and parameters unchanged, return PyTorch nn.Module instance.
     """
-    print("Using PyTorch implemented TCN model...")
+    # print("Using PyTorch implemented TCN model...")
     model = TCNModel(
         max_input_window_size=max_input_window_size,
         num_segments_exc=num_segments_exc,
@@ -251,7 +251,7 @@ def create_temporaly_convolutional_model(max_input_window_size, num_segments_exc
         initializer_per_layer=initializer_per_layer,
         use_improved_initialization=use_improved_initialization
     )
-    print(model)
+    # print(model)
     return model
 
 

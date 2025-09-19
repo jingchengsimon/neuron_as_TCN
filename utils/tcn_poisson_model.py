@@ -88,11 +88,9 @@ class TCNPoissonModel(nn.Module):
         with torch.no_grad():
             # Poisson sampling in forward pass
             poisson_samples = torch.poisson(safe_firing_rates)
-            # Clip to binary (0 or 1) to match original behavior
-            poisson_binary = torch.clamp(poisson_samples, 0, 1)
         
         # Straight-Through Estimator: use Poisson result but gradient flows through safe_firing_rates
-        first_half_spikes = poisson_binary + safe_firing_rates - safe_firing_rates.detach()
+        first_half_spikes = poisson_samples + safe_firing_rates - safe_firing_rates.detach()
         
         # Copy first half to second half, ensure base spikes are identical
         second_half_spikes = first_half_spikes.clone()

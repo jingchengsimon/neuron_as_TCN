@@ -88,7 +88,7 @@ def load_and_visualize_firing_rates(npy_file_path, num_exc_segments=639, save_di
             save_path=raster_save_path,
             title=f"Firing Rates Raster Plot - {base_name}",
             max_segments_to_show=10,
-            figsize=(16, 10)
+            figsize=(18, 12)
         )
         print(f"Raster plot 已保存")
         
@@ -106,7 +106,7 @@ def load_and_visualize_firing_rates(npy_file_path, num_exc_segments=639, save_di
             save_path=heatmap_save_path,
             title=f"Firing Rates Heatmap - {base_name}",
             max_segments_to_show=400,
-            figsize=(16, 8)
+            figsize=(18, 12)
         )
         print(f"Heatmap 已保存")
         

@@ -1099,7 +1099,7 @@ def main():
             num_exc_segments=639,
             save_path=os.path.join(save_dir, 'optimized_firing_rates_heatmap.png'),
             title="Optimized Firing Rates - Heatmap",
-            max_segments_to_show=10,
+            max_segments_to_show=200,
             specified_segments=specified_segments
         )
         

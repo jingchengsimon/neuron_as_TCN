@@ -106,7 +106,7 @@ class MainFigureReplication:
         output_dir = f"./results/5_main_figure_replication/{dataset_identifier}"
         os.makedirs(output_dir, exist_ok=True)
         # Find test files
-        test_files = sorted(glob.glob(test_data_dir + '*_128x6_*'))[:10]
+        test_files = sorted(glob.glob(test_data_dir + '*_128x6_*')) #[:10]
         if not test_files:
             test_files = sorted(glob.glob(os.path.join(test_data_dir, '*.p')))
         # Find best model
