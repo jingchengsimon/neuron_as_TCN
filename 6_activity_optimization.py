@@ -1,11 +1,12 @@
 import os
+import gc
 import numpy as np
 import torch
 import pickle
 from utils.tcn_poisson_model import TCNPoissonModel
 from utils.find_best_model import find_best_model
 from utils.visualization_utils import create_optimization_report
-
+from utils.simpleModelVer2_Aim2 import run_simulation_batch
 
 def convert_to_preferred_type(data, use_torch=True, device=None, dtype=torch.float32):
     """
@@ -44,21 +45,25 @@ class FiringRatesProcessor:
     Contains data loading, preprocessing, and utility functions
     """
     
-    def __init__(self, time_duration_ms=300, return_torch=True):
+    def __init__(self, time_duration_ms=300, return_torch=True, device=None):
         """
         Initialize data processor
         
         Args:
             time_duration_ms: Time duration, default 300ms
             return_torch: Whether to return torch tensors, default True
+            device: Device for torch tensors
         """
         # Basic configuration
         self.time_duration_ms = time_duration_ms
         self.return_torch = return_torch
+        self.device = device
         
         print(f"FiringRatesProcessor initialized successfully:")
         print(f"  Time duration: {self.time_duration_ms}ms")
         print(f"  Return type: {'torch tensors' if return_torch else 'numpy arrays'}")
+        if device is not None:
+            print(f"  Device: {device}")
     
     def load_init_firing_rates(self, firing_rates_path, num_segments_total=1279):
         """
@@ -158,13 +163,13 @@ class FiringRatesProcessor:
             # Take first batch_size samples
             extracted_rates = extracted_rates[:batch_size, :, :]
         
-        print(f"Prepare for optimization:")
-        print(f"  Original input shape: {firing_rates_np.shape}")
-        print(f"  Extracted time: {start_time_ms}-{end_time_ms}ms")
-        print(f"  Extracted input shape: {extracted_rates.shape}")
+        # print(f"Prepare for optimization:")
+        # print(f"  Original input shape: {firing_rates_np.shape}")
+        # print(f"  Extracted time: {start_time_ms}-{end_time_ms}ms")
+        # print(f"  Extracted input shape: {extracted_rates.shape}")
         
         extracted_rates = extracted_rates.astype(np.float32)
-        return convert_to_preferred_type(extracted_rates, use_torch=self.return_torch)
+        return convert_to_preferred_type(extracted_rates, use_torch=self.return_torch, device=self.device)
     
     def generate_background_firing_rates(self, batch_size=2, num_segments_exc=639, num_segments_inh=640):
         """
@@ -198,7 +203,7 @@ class FiringRatesProcessor:
         )
         
         firing_rates = firing_rates.astype(np.float32)
-        return convert_to_preferred_type(firing_rates, use_torch=self.return_torch)
+        return convert_to_preferred_type(firing_rates, use_torch=self.return_torch, device=self.device)
     
 
 class ActivityOptimizer:
@@ -207,15 +212,16 @@ class ActivityOptimizer:
     Focuses on optimization algorithms and gradient computation, delegates data processing to FiringRatesProcessor
     """
     
-    def __init__(self, model_path, model_params_path, init_firing_rates_path=None, time_duration_ms=300):
+    def __init__(self, model_path, model_params_path, init_firing_rates=None, time_duration_ms=300, monoconn_seg_indices=None):
         """
         Initialize optimizer
         
         Args:
             model_path: Path to trained model .h5 file
             model_params_path: Path to corresponding parameters .pickle file
-            init_firing_rates_path: Path to initial firing rates .npy file
+            init_firing_rates: initial firing rates numpy array
             time_duration_ms: Time duration, default 300ms
+            monoconn_seg_indices: fixed excitatory indices
         """
         # Load model parameters
         with open(model_params_path, 'rb') as f:
@@ -228,6 +234,7 @@ class ActivityOptimizer:
         self.num_segments_inh = 640
         self.num_segments_total = self.num_segments_exc + self.num_segments_inh
         self.time_duration_ms = time_duration_ms
+        self.monoconn_seg_indices = monoconn_seg_indices
         
         # Create TCN Poisson model
         self.tcn_poisson_model = TCNPoissonModel(
@@ -239,18 +246,24 @@ class ActivityOptimizer:
             time_duration_ms=time_duration_ms
         )
         
-        # Create data processor for utility functions
-        self.processor = FiringRatesProcessor(time_duration_ms=time_duration_ms, return_torch=True)
-        
-        # Load initial firing rates (if provided)
-        self.init_firing_rates = None
-        if init_firing_rates_path and os.path.exists(init_firing_rates_path):
-            self.init_firing_rates = self.processor.load_init_firing_rates(init_firing_rates_path, self.num_segments_total)
-        
         # Set device and ensure model is on the correct device
         self.device = next(self.tcn_poisson_model.parameters()).device
+        
+        # Create data processor for utility functions
+        self.processor = FiringRatesProcessor(time_duration_ms=time_duration_ms, return_torch=True, device=self.device)
+        
+        # Load initial firing rates (if provided)
+        # self.init_firing_rates = None
+        # if init_firing_rates_path and os.path.exists(init_firing_rates_path):
+        #     self.init_firing_rates = self.processor.load_init_firing_rates(init_firing_rates_path, self.num_segments_total)
+        
+        self.init_firing_rates = init_firing_rates
+        
         print(f"Activity Optimizer initialized successfully.")
-        print(f"  Device: {self.device}")
+        # print(f"  Device: {self.device}")
+        # print(f"  CUDA available: {torch.cuda.is_available()}")
+        if torch.cuda.is_available():
+            print(f"  GPU memory: {torch.cuda.get_device_properties(0).total_memory / 1024**3:.1f} GB")
         if self.init_firing_rates is not None:
             print(f"  Initial firing rates loaded: {self.init_firing_rates.shape}")
             # Move initial firing rates to device if they are torch tensors
@@ -266,7 +279,6 @@ class ActivityOptimizer:
         
         Args:
             firing_rates: (batch, num_segments_total, time_duration) torch tensor
-            monoconn_seg_indices: fixed excitatory indices
             target_spike_prob: target spike probability
             
         Returns:
@@ -289,11 +301,25 @@ class ActivityOptimizer:
         # Use PyTorch's built-in BCE loss function
         pred_loss = torch.nn.functional.binary_cross_entropy(spike_preds_max, spike_target_max)
 
+        # Add penalty term: ensure second half >= first half (non-negative difference)
+        batch_size = spike_preds_max.shape[0]
+        if batch_size >= 2:
+            first_half = spike_preds_max[:batch_size//2]  # Control group
+            second_half = spike_preds_max[batch_size//2:]  # Stimulation group
+            # Penalty for negative differences (second_half < first_half)
+            diff_penalty = torch.mean(torch.relu(first_half - second_half))
+        else:
+            diff_penalty = torch.tensor(0.0, device=spike_preds_max.device)
+        
+        # Apply coefficient to make diff penalty contribute meaningfully to loss
+        diff_penalty_weight = 20.0  # Adjust this coefficient based on training dynamics
+        total_loss = pred_loss # + diff_penalty_weight * diff_penalty
+
         # reg_loss = learning_rate * torch.mean(firing_rates)
-        return pred_loss, spike_preds_max
+        return total_loss, spike_preds_max
 
     def optimize_activity(self, num_iterations=100, learning_rate=0.01, batch_size=4, 
-                         target_spike_prob=0.8, start_time_ms=100, random_seed=42):
+                         target_spike_prob=0.8, start_time_ms=100, random_seed=42, freq_inh_hz=4.0):
         """
         Execute activity optimization using TensorFlow compile and fit methods
         
@@ -326,12 +352,16 @@ class ActivityOptimizer:
                 batch_size, self.num_segments_exc, self.num_segments_inh
             )
         
-        # Select fixed excitatory indices
-        monoconn_seg_indices = torch.randperm(self.num_segments_exc)[:3].numpy()
-        print(f"Fixed excitatory segments for adding spikes: {monoconn_seg_indices}")
-        
         # Convert firing_rates to torch nn.Parameter (default requires_grad=True)
+        # Ensure initial_firing_rates is on the correct device
+        if isinstance(initial_firing_rates, torch.Tensor):
+            initial_firing_rates = initial_firing_rates.to(self.device)
         firing_rates = torch.nn.Parameter(initial_firing_rates)
+        # Only allow gradients for excitatory segments (first 639), freeze inhibitory segments (last 640)
+        firing_rates.register_hook(lambda grad: grad * torch.cat([
+            torch.ones_like(grad[:, :self.num_segments_exc, :]),
+            torch.zeros_like(grad[:, self.num_segments_exc:, :])
+        ], dim=1))
         
         # Choose an optimizer, add learning rate scheduler
         optimizer = torch.optim.Adam([firing_rates], lr=float(learning_rate))
@@ -344,45 +374,67 @@ class ActivityOptimizer:
         firing_rates_history = [firing_rates.clone().detach().cpu().numpy()]
         loss_history = []
         spike_preds_history = []
+        gradient_norm_history = []
 
         for epoch in range(num_iterations):
 
             optimizer.zero_grad()
-            spike_preds, _ = self.tcn_poisson_model(firing_rates, monoconn_seg_indices)
+            spike_preds, _ = self.tcn_poisson_model(firing_rates, self.monoconn_seg_indices)
             loss, spike_preds_max = self.compute_loss(spike_preds, target_spike_prob)
 
-            batch1_max = spike_preds_max[0].detach().cpu().numpy().item()
-            batch2_max = spike_preds_max[1].detach().cpu().numpy().item()
+            batch1_max = torch.mean(torch.max(spike_preds_max[:batch_size], dim=1)[0]).detach().cpu().numpy().item()      
+            batch2_max = torch.mean(torch.max(spike_preds_max[batch_size:], dim=1)[0]).detach().cpu().numpy().item()
 
-            # Record spike predictions every 100 steps
-            if epoch % 100 == 0:
-                print(f"Iter {epoch:4d}: Pred_loss: {loss.item():.4f}, Spike_preds_max: [{batch1_max:.3f}, {batch2_max:.3f}], Diff = {batch2_max-batch1_max:.3f}")
-                
             # Backward propagation
             loss.backward()
-            torch.nn.utils.clip_grad_norm_([firing_rates], max_norm=2.0) # Gradient clipping (optional)
+            # torch.nn.utils.clip_grad_norm_([firing_rates], max_norm=2.0) # Gradient clipping (optional)
+
+            # Calculate gradient norm
+            grad_norm = torch.norm(firing_rates.grad).item()
+            gradient_norm_history.append(grad_norm)
 
             optimizer.step()
             scheduler.step(loss.item())
 
-            firing_rates_history.append(firing_rates.clone().detach().cpu().numpy())
+            # After updating excitatory by gradient, update inhibitory deterministically from excitatory
+            with torch.no_grad():
+                for batch_idx in range(firing_rates.shape[0]):
+                    exc_firing_rate_tensor = firing_rates[batch_idx, :self.num_segments_exc, :] # (639, T)
+                    inh_firing_rate_tensor_new = torch.zeros(self.num_segments_inh, firing_rates.shape[2], device=firing_rates.device, dtype=firing_rates.dtype)
+        
+                    inh_firing_rate_tensor_new[1:] = (float(freq_inh_hz)/1000.0)*(exc_firing_rate_tensor/torch.mean(exc_firing_rate_tensor))
+                    inh_firing_rate_tensor_new[0] = (float(freq_inh_hz)/1000.0)*(exc_firing_rate_tensor[0, :]/torch.mean(exc_firing_rate_tensor))
+                    firing_rates[batch_idx, self.num_segments_exc:, :] = inh_firing_rate_tensor_new
+
             loss_history.append(float(loss.detach().cpu().numpy()))
             spike_preds_history.append([batch1_max, batch2_max])
+
+            # 定期清理GPU缓存和垃圾回收
+            if epoch % 50 == 0:
+                firing_rates_history.append(firing_rates.clone().detach().cpu().numpy())
+                torch.cuda.empty_cache()
+                gc.collect()
+
+            # Record spike predictions every 300 steps
+            if epoch % 300 == 0:
+                print(f"Iter {epoch:4d}: Pred_loss: {loss.item():.4f}, Spike_preds_max: [{batch1_max:.3f}, {batch2_max:.3f}], Diff = {batch2_max-batch1_max:.3f}")
+                
+            # 删除不再需要的中间变量以释放内存
+            del spike_preds, spike_preds_max, loss
 
         print("-" * 50)
         print(f"Optimization completed! Final loss: {loss_history[-1]:.6f}")
         
-        optimized_firing_rates = firing_rates.detach().numpy()
+        optimized_firing_rates = firing_rates.detach().cpu().numpy()
 
-        return optimized_firing_rates, firing_rates_history, loss_history, spike_preds_history, monoconn_seg_indices
+        return optimized_firing_rates, firing_rates_history, loss_history, spike_preds_history, gradient_norm_history
     
-    def evaluate_optimized_activity(self, optimized_firing_rates, monoconn_seg_indices, num_evaluations=10):
+    def evaluate_optimized_activity(self, optimized_firing_rates, num_evaluations=10):
         """
         Evaluate optimized activity
         
         Args:
             optimized_firing_rates: optimized firing rates (batch_size, num_segments, time_duration)
-            monoconn_seg_indices: fixed excitatory indices
             num_evaluations: number of evaluations
             
         Returns:
@@ -397,7 +449,7 @@ class ActivityOptimizer:
             try:
                 # Use TCN Poisson model for evaluation (no gradients)
                 spike_predictions, _ = self.tcn_poisson_model.predict_eval(
-                    optimized_firing_rates, monoconn_seg_indices
+                    optimized_firing_rates, self.monoconn_seg_indices
                 )
                 
                 # Ensure spike_predictions is torch tensor
@@ -413,8 +465,14 @@ class ActivityOptimizer:
                 
                 spike_probabilities.extend(batch_spike_probs)
                 
-                # if eval_idx % 5 == 0:
-                #     print(f"  Evaluation progress: {eval_idx + 1}/{num_evaluations}")
+                # 清理中间变量
+                del spike_predictions, batch_spike_probs
+                
+                # 定期清理GPU缓存
+                if eval_idx % 5 == 0:
+                    torch.cuda.empty_cache()
+                    gc.collect()
+                    print(f"  Evaluation progress: {eval_idx + 1}/{num_evaluations}")
                     
             except Exception as e:
                 print(f"  Evaluation {eval_idx + 1} failed: {e}")
@@ -451,58 +509,66 @@ def main():
     # models_dir = '/G/results/aim2_sjc/Models_TCN/Single_Neuron_InOut_SJC_funcgroup2_var2_AMPA/models/AMPA_torch/depth_1_filters_128_window_400/'
     
     data_type = 'NMDA' if 'NMDA' in models_dir else 'AMPA'
-    random_seed = 40
-  
-    for random_seed in [2]:
-        save_dir = f'./results/6_activity_optimization_results/{data_type}_seed_{random_seed}'
+    batch_size = 5
 
-        init_firing_rates_path = './init_firing_rate_array.npy'
-        if not os.path.exists(init_firing_rates_path):
-            print(f"Warning: Initial firing rates file does not exist: {init_firing_rates_path}")
-            print("Will use randomly generated initial firing rates")
-            init_firing_rates_path = None
-        print("Finding best model...")
-        try:
-            model_path, params_path = find_best_model(models_dir)
-            print(f"Selected model: {os.path.basename(model_path)}")
-        except Exception as e:
-            print(f"Error: {e}")
+    # Select fixed excitatory indices
+    range0_idx = [1, 2, 4, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 26, 
+                  27, 30, 31, 34, 35, 36, 37, 40, 43, 44, 45, 46, 47, 48, 49, 52, 53, 54, 55, 
+                  56, 57, 58, 61, 64, 65, 66, 69, 72, 73, 74, 75, 76, 79, 80, 81, 82, 83, 84]
+
+    for save_dir_idx in range(1, 2):
+        # random choose 3 indices
+        np.random.seed(save_dir_idx)
+        monoconn_seg_indices = np.random.choice(range0_idx, size=3, replace=False) # torch.randperm(self.num_segments_exc)[:3].numpy()
+        print(f"Fixed excitatory segments for adding spikes: {monoconn_seg_indices}")
             
-        optimizer = ActivityOptimizer(
-            model_path=model_path, 
-            model_params_path=params_path, 
-            init_firing_rates_path=init_firing_rates_path,
-            time_duration_ms=400
-        )
+        for random_seed in [42]:
+            save_dir = f'./results/6_activity_optimization_results/{data_type}_seed_{random_seed}_inhfixed_{save_dir_idx}'
 
-        optimized_firing_rates, firing_rates_history, loss_history, spike_preds_history, monoconn_seg_indices = optimizer.optimize_activity(
-            num_iterations=2000,
-            learning_rate=0.003,
-            batch_size=1,  # 增加batch_size，确保有对照组和刺激组
-            target_spike_prob=1,
-            start_time_ms=0,
-            random_seed=random_seed
-        )
+            init_firing_rates = run_simulation_batch(num_runs=batch_size, epoch=random_seed, rebuild_cell=False)
 
-        evaluation_results = optimizer.evaluate_optimized_activity(
-            optimized_firing_rates, monoconn_seg_indices, num_evaluations=20
-        )
-        print("\n=== Optimization Completed ===")
-        
-        try:
-            print("\nGenerating visualization for optimized firing rates...")
-            create_optimization_report(
-                loss_history=loss_history,
-                firing_rates_history=firing_rates_history,
-                spike_preds_history=spike_preds_history,
-                monoconn_seg_indices=monoconn_seg_indices,
-                num_segments_exc=639, num_segments_inh=640,
-                time_duration_ms=400, input_window_size=400,
-                save_dir=save_dir, report_name="activity_optimization"
+            try:
+                model_path, params_path = find_best_model(models_dir)
+                # print(f"Selected model: {os.path.basename(model_path)}")
+            except Exception as e:
+                print(f"Error: {e}")
+                
+            optimizer = ActivityOptimizer(
+                model_path=model_path, 
+                model_params_path=params_path, 
+                init_firing_rates=init_firing_rates,
+                time_duration_ms=400,
+                monoconn_seg_indices=monoconn_seg_indices
             )
-            print("Complete optimization report generated")
-        except ImportError:
-            print("Visualization module not available, skipping visualization step")
+
+            optimized_firing_rates, firing_rates_history, loss_history, spike_preds_history, gradient_norm_history = optimizer.optimize_activity(
+                num_iterations=500,
+                learning_rate=0.002,
+                batch_size=batch_size,  # 增加batch_size，确保有对照组和刺激组
+                target_spike_prob=1,
+                start_time_ms=0,
+                random_seed=random_seed
+            )
+
+            # evaluation_results = optimizer.evaluate_optimized_activity(
+            #     optimized_firing_rates, num_evaluations=20
+            # )
+            print("\n===== Optimization Completed =====")
+            
+            try:
+                create_optimization_report(
+                    loss_history=loss_history,
+                    firing_rates_history=firing_rates_history,
+                    spike_preds_history=spike_preds_history,
+                    gradient_norm_history=gradient_norm_history,
+                    monoconn_seg_indices=monoconn_seg_indices,
+                    num_segments_exc=639, num_segments_inh=640,
+                    time_duration_ms=400, input_window_size=400,
+                    save_dir=save_dir, report_name="activity_optimization"
+                )
+                print("Complete optimization report generated")
+            except ImportError:
+                print("Visualization module not available, skipping visualization step")
 
 if __name__ == "__main__":
     main() 

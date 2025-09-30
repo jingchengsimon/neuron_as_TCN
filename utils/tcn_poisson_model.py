@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import numpy as np
-from utils.fit_CNN_torch import create_temporaly_convolutional_model
+from utils.fit_CNN_torch import TCNModel
 
 
 class TCNPoissonModel(nn.Module):
@@ -35,27 +35,31 @@ class TCNPoissonModel(nn.Module):
         
         # Load TCN model
         architecture_dict = model_params['architecture_dict']
-        self.tcn_model = create_temporaly_convolutional_model(
-            input_window_size,
-            num_segments_exc,
-            num_segments_inh,
-            architecture_dict['filter_sizes_per_layer'],
-            architecture_dict['num_filters_per_layer'],
-            architecture_dict['activation_function_per_layer'],
-            architecture_dict['strides_per_layer'],
-            architecture_dict['dilation_rates_per_layer'],
-            architecture_dict['initializer_per_layer'],
+        self.tcn_model = TCNModel(
+            max_input_window_size=input_window_size,
+            num_segments_exc=num_segments_exc,
+            num_segments_inh=num_segments_inh,
+            filter_sizes_per_layer=architecture_dict['filter_sizes_per_layer'],
+            num_filters_per_layer=architecture_dict['num_filters_per_layer'],
+            activation_function_per_layer=architecture_dict['activation_function_per_layer'],
+            strides_per_layer=architecture_dict['strides_per_layer'],
+            dilation_rates_per_layer=architecture_dict['dilation_rates_per_layer'],
+            initializer_per_layer=architecture_dict['initializer_per_layer'],
             use_improved_initialization=False
         )
         
         # Load weights
         try:
             pt_path = model_path.replace('.h5', '.pt') if model_path.endswith('.h5') else model_path
-            state = torch.load(pt_path, map_location='cpu', weights_only=False)
-            self.tcn_model.load_state_dict(state)
-            print(f"TCN weights loaded successfully from {pt_path}")
+            # Auto-detect device for loading weights
+            device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+            state = torch.load(pt_path, map_location=device, weights_only=False)
+            self.tcn_model.load_state_dict(state, strict=False)
+            # Move model to the detected device
+            self.tcn_model = self.tcn_model.to(device)
+            # print(f"TCN weights loaded successfully from {pt_path} on {device}")
         except Exception as e:
-            print(f"Warning: Unable to load TCN weights: {e}")
+            print(f"Error: Unable to load TCN weights: {e}")
         
         # Set model to evaluation mode and freeze parameters
         self.tcn_model.eval()
@@ -110,6 +114,7 @@ class TCNPoissonModel(nn.Module):
                 # Add spikes to specified three excitatory segments at half window size
                 for idx in fixed_exc_indices:
                     spike_trains[batch_size:, idx, spike_time_mono_syn] = 1.0
+                    spike_trains[:batch_size:, idx, spike_time_mono_syn] = 0.0
         
         # Prepare input for TCN model
         model_input = spike_trains.permute(0, 2, 1)

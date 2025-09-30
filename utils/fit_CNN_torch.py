@@ -117,7 +117,6 @@ def parse_sim_experiment_file(sim_experiment_file, print_logs=False):
 
     return X, y_spike, y_soma
 
-
 class CausalConv1d(nn.Module):
     """
     Causal convolution: only pad on the left side, ensuring output time dimension matches input (when stride=1).
@@ -187,9 +186,11 @@ class TCNModel(nn.Module):
             if conv.conv.bias is not None:
                 nn.init.zeros_(conv.conv.bias)
             
+            # Follow Keras order: Conv -> Activation -> BatchNorm
             layers.append(conv)
-            layers.append(nn.BatchNorm1d(num_features=num_filters))
             layers.append(get_activation(activation))
+            layers.append(nn.BatchNorm1d(num_features=num_filters, momentum=0.01, eps=0.001))
+            # layers.append(nn.BatchNorm1d(num_features=num_filters))
             current_channels = num_filters
         
         self.tcn = nn.Sequential(*layers)
@@ -225,35 +226,6 @@ class TCNModel(nn.Module):
         spikes = spikes.permute(0, 2, 1)
         soma   = soma.permute(0, 2, 1)
         return spikes, soma
-
-
-def create_temporaly_convolutional_model(max_input_window_size, num_segments_exc, num_segments_inh, filter_sizes_per_layer,
-                                                                                             num_filters_per_layer,
-                                                                                             activation_function_per_layer,
-                                                                                             strides_per_layer,
-                                                                                             dilation_rates_per_layer,
-                                                                                             initializer_per_layer,
-                                                                                             use_improved_initialization=False):
-    """
-    Create temporal convolutional network model (PyTorch implementation).
-    Keep function name and parameters unchanged, return PyTorch nn.Module instance.
-    """
-    # print("Using PyTorch implemented TCN model...")
-    model = TCNModel(
-        max_input_window_size=max_input_window_size,
-        num_segments_exc=num_segments_exc,
-        num_segments_inh=num_segments_inh,
-        filter_sizes_per_layer=filter_sizes_per_layer,
-        num_filters_per_layer=num_filters_per_layer,
-        activation_function_per_layer=activation_function_per_layer,
-        strides_per_layer=strides_per_layer,
-        dilation_rates_per_layer=dilation_rates_per_layer,
-        initializer_per_layer=initializer_per_layer,
-        use_improved_initialization=use_improved_initialization
-    )
-    # print(model)
-    return model
-
 
 class SimulationDataGenerator:
     'thread-safe data generator for network training'

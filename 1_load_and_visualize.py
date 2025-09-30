@@ -82,7 +82,7 @@ def load_and_visualize_firing_rates(npy_file_path, num_exc_segments=639, save_di
     raster_save_path = os.path.join(save_dir, f"{base_name}_raster_plot.png")
     
     try:
-        stats = visualize_firing_rates_trace(
+        visualize_firing_rates_trace(
             firing_rates=firing_rates,
             num_exc_segments=num_exc_segments,
             save_path=raster_save_path,

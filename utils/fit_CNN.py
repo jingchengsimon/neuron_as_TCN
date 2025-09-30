@@ -152,20 +152,10 @@ def create_temporaly_convolutional_model(max_input_window_size, num_segments_exc
                        strides=stride, dilation_rate=dilation_rate, padding='causal', name='layer_%d' %(k + 1))(x)
         x = BatchNormalization(name='layer_%d_BN' %(k + 1))(x)
     
-    # 根据配置选择不同的初始化策略
-    if use_improved_initialization:
-        print("使用改进的初始化策略...")
-        # 改进的spike输出初始化
-        output_spike_init_weights = initializers.TruncatedNormal(stddev=0.01)  # 从0.001增加到0.01
-        output_spike_init_bias    = initializers.Constant(value=0.0)          # 从-2.0改为0.0，避免过度偏向"无spike"
-        # 改进的soma输出初始化
-        output_soma_init = initializers.TruncatedNormal(stddev=0.1)           # 从0.03增加到0.1
-    else:
-        print("使用原有初始化策略...")
-        # 原有初始化
-        output_spike_init_weights = initializers.TruncatedNormal(stddev=0.001)
-        output_spike_init_bias    = initializers.Constant(value=-2.0)
-        output_soma_init = initializers.TruncatedNormal(stddev=0.03)
+    
+    output_spike_init_weights = initializers.TruncatedNormal(stddev=0.001)
+    output_spike_init_bias    = initializers.Constant(value=-2.0)
+    output_soma_init = initializers.TruncatedNormal(stddev=0.03)
 
     output_spike_predictions = Conv1D(1, 1, activation='sigmoid', kernel_initializer=output_spike_init_weights, bias_initializer=output_spike_init_bias,
                                                                   kernel_regularizer=l2(1e-8), padding='causal', name='spikes')(x)
@@ -175,29 +165,9 @@ def create_temporaly_convolutional_model(max_input_window_size, num_segments_exc
                                                   [output_spike_predictions, output_soma_voltage_pred])
 
     optimizer_to_use = Nadam(lr=0.0001)
-    
-    # 根据配置选择不同的loss函数
-    if use_improved_initialization:
-        print("使用改进的Loss函数...")
-        # 使用Focal Loss处理类别不平衡问题
-        def focal_loss(gamma=2, alpha=0.75):
-            def focal_loss_fixed(y_true, y_pred):
-                pt_1 = tf.where(tf.equal(y_true, 1), y_pred, 1-y_pred)
-                pt_1 = tf.keras.backend.clip(pt_1, 1e-7, 1.0)
-                return -tf.reduce_mean(alpha * tf.pow(1-pt_1, gamma) * tf.math.log(pt_1))
-            return focal_loss_fixed
-        
-        # 使用改进的loss权重
-        temporaly_convolutional_network_model.compile(optimizer=optimizer_to_use,
-                                                      loss=[focal_loss(), 'mse'],
-                                                      loss_weights=[1.0, 0.006])  
-    else:
-        print("使用原有Loss函数...")
-        # 原有loss配置
-        temporaly_convolutional_network_model.compile(optimizer=optimizer_to_use,
+    temporaly_convolutional_network_model.compile(optimizer=optimizer_to_use,
                                                       loss=['binary_crossentropy','mse'],
-                                                      loss_weights=[1.0, 0.006]) 
-    
+                                                      loss_weights=[1.0, 0.006])   
     temporaly_convolutional_network_model.summary()
     
     return temporaly_convolutional_network_model

@@ -1,17 +1,13 @@
 import pickle
 import glob
-import gc
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import seaborn as sns
-from pathlib import Path
 import os
-from sklearn.metrics import roc_auc_score, roc_curve, auc
-from sklearn.metrics import precision_recall_curve, average_precision_score
+from sklearn.metrics import roc_auc_score
+from sklearn.metrics import average_precision_score
 import torch
-import torch.nn as nn
-from utils.fit_CNN_torch import create_temporaly_convolutional_model, parse_sim_experiment_file
+from utils.fit_CNN_torch import TCNModel, parse_sim_experiment_file
 
 def load_test_data(test_file):
     """
@@ -72,19 +68,11 @@ def calculate_auc_metrics(model_path, test_data_dir):
         num_segments_inh = total_segments - num_segments_exc
 
         # Build PyTorch model and load weights
-        model_torch = create_temporaly_convolutional_model(
-            input_window_size,
-            num_segments_exc,
-            num_segments_inh,
-            filter_sizes_per_layer,
-            num_filters_per_layer,
-            activation_function_per_layer,
-            l2_regularization_per_layer,
-            strides_per_layer,
-            dilation_rates_per_layer,
-            initializer_per_layer,
-            use_improved_initialization=False
-        ).to(device)
+        model_torch = TCNModel(input_window_size, num_segments_exc, num_segments_inh, 
+                                filter_sizes_per_layer, num_filters_per_layer,
+                                activation_function_per_layer, strides_per_layer, 
+                                dilation_rates_per_layer, initializer_per_layer,
+                                use_improved_initialization=False).to(device)
 
         # Load state_dict (same name as pickle but .pt file)
         pt_path = model_path.replace('.pickle', '.pt')

@@ -6,7 +6,7 @@ import pickle
 from datetime import datetime  
 from itertools import product
 from utils.gpu_monitor import GPUMonitor, configure_pytorch_gpu, get_gpu_memory_info
-from utils.fit_CNN_torch import create_temporaly_convolutional_model, SimulationDataGenerator
+from utils.fit_CNN_torch import TCNModel, SimulationDataGenerator
 from utils.model_analysis import (
     load_model_results, print_model_summary, 
     plot_training_curves, plot_model_comparison, analyze_training_stability, plot_auc_analysis
@@ -132,11 +132,11 @@ def train_and_save(network_depth, num_filters_per_layer, input_window_size, num_
 
     
     assert(input_window_size > sum(filter_sizes_per_layer))
-    temporal_conv_net = create_temporaly_convolutional_model(input_window_size, num_segments_exc, num_segments_inh, 
-                                                            filter_sizes_per_layer, num_filters_per_layer,
-                                                            activation_function_per_layer, strides_per_layer, 
-                                                            dilation_rates_per_layer, initializer_per_layer,
-                                                            use_improved_initialization=use_improved_initialization)
+    temporal_conv_net = TCNModel(input_window_size, num_segments_exc, num_segments_inh, 
+                                filter_sizes_per_layer, num_filters_per_layer,
+                                activation_function_per_layer, strides_per_layer, 
+                                dilation_rates_per_layer, initializer_per_layer,
+                                use_improved_initialization=use_improved_initialization)
 
     # Move model to specified device and create loss functions
     temporal_conv_net = temporal_conv_net.to(device)
@@ -450,7 +450,7 @@ def main():
     num_filters_per_layer_list = [256]  # Other parameters can be fixed or adjusted
     input_window_size_list = [400]  # Traverse different input_window_size here
 
-    num_epochs = 1
+    num_epochs = 250
 
     # Configure improvement options
     use_improved_initialization = False   # Set to True to enable improved initialization strategy
@@ -488,7 +488,7 @@ def main():
     test_suffix = '' #'_SJC_funcgroup2_var2'
     base_path = '/G/results/aim2_sjc/Models_TCN/Single_Neuron_InOut' + test_suffix
     data_suffix = 'L5PC_NMDA'
-    model_suffix = 'NMDA_torch'
+    model_suffix = 'NMDA_torch_2'
     
     # Dynamically build analysis suffix
     analysis_suffix = build_analysis_suffix(test_suffix, model_suffix)

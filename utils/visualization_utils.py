@@ -53,7 +53,7 @@ def _setup_inset_axes(parent_ax, xlim, ylim, xlabel, ylabel, fontsize=8, tick_fo
 
 def _process_segments_data(firing_rates, num_exc_segments, num_inh_segments, max_segments_to_show, specified_segments=None):
     """Process segments data and return separated data with indices"""
-    num_segments_total, time_duration_ms = firing_rates.shape
+    num_segments_total, _ = firing_rates.shape
     num_inh_segments_calc = num_segments_total - num_exc_segments
     
     # Separate excitatory and inhibitory data
@@ -757,8 +757,10 @@ def visualize_optimized_firing_rates(initial_firing_rates, optimized_firing_rate
     """Visualize optimized firing rates"""
     
     # Use first batch for visualization
-    initial_sample = initial_firing_rates[0] if len(initial_firing_rates.shape) > 2 else initial_firing_rates
-    optimized_sample = optimized_firing_rates[0]  # (num_segments, time_duration)
+    initial_sample = np.mean(initial_firing_rates, axis=0)
+    optimized_sample = np.mean(optimized_firing_rates, axis=0)
+    # initial_sample = initial_firing_rates[0] if len(initial_firing_rates.shape) > 2 else initial_firing_rates
+    # optimized_sample = optimized_firing_rates[0]  # (num_segments, time_duration)
     
     #print("Generating optimized firing rates visualization...")
     
@@ -769,7 +771,7 @@ def visualize_optimized_firing_rates(initial_firing_rates, optimized_firing_rate
         extended_indices = []
         for idx in monoconn_seg_indices:
             # Add k segments before and after each fixed index
-            num_segments_to_add = 30
+            num_segments_to_add = 10
             start_idx = max(0, idx - num_segments_to_add)
             end_idx = min(num_inh_segments, idx + num_segments_to_add + 1)
             extended_indices.extend(range(start_idx, end_idx))
@@ -798,13 +800,38 @@ def visualize_optimized_firing_rates(initial_firing_rates, optimized_firing_rate
     
     print("Optimized firing rates visualization completed")
     
-def plot_loss_and_spike_preds_history(loss_history, spike_preds_history, 
-                                     title="Activity Optimization History", 
-                                     figsize=(20, 6), save_path=None, show_plot=False):
-    """Plot loss history curve, spike prediction history curve, and batch difference"""
-    fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=figsize)
+def plot_gradient_norm_history(gradient_norm_history, title="Gradient Norm History",
+                               figsize=(10, 6), save_path=None, show_plot=False):
+    """Plot gradient norm history curve"""
+    fig, ax = plt.subplots(1, 1, figsize=figsize)
     
-    # Plot loss history
+    # Plot gradient norm history
+    ax.plot(gradient_norm_history, linewidth=1.5, color='green', alpha=0.8)
+    _setup_plot_style(ax, 'Gradient Norm History', 'Iteration', 'Gradient Norm')
+    
+    if len(gradient_norm_history) > 0:
+        stats = _calculate_basic_stats(gradient_norm_history)
+        stats_renamed = {
+            'Final': stats['Final'], 
+            'Min': stats['Min'], 
+            'Max': stats['Max'],
+            'Mean': stats['Mean']
+        }
+        _add_statistics_text(ax, stats_renamed, box_color='lightgreen')
+    
+    plt.suptitle(title, fontsize=14, fontweight='bold')
+    plt.tight_layout()
+    return _save_and_show_plot(fig, save_path, show_plot, message_prefix="Gradient norm history")
+
+def plot_loss_and_spike_preds_history(loss_history, spike_preds_history, gradient_norm_history=None,
+                                     title="Activity Optimization History", 
+                                     figsize=(20, 12), save_path=None, show_plot=False):
+    """Plot loss history, spike prediction history, batch difference, correlation, and gradient norm (2x3 subplots)"""
+    fig, axes = plt.subplots(2, 3, figsize=figsize)
+    ax1, ax2, ax5 = axes[0]
+    ax3, ax4, ax6 = axes[1]
+    
+    # Plot loss history (top-left)
     ax1.plot(loss_history, linewidth=1.5, color='blue', alpha=0.8)
     _setup_plot_style(ax1, 'Loss History', 'Iteration', 'Loss')
     
@@ -813,7 +840,8 @@ def plot_loss_and_spike_preds_history(loss_history, spike_preds_history,
         stats_renamed = {'Final': stats['Final'], 'Min': stats['Min'], 'Imp': stats['Improvement']}
         _add_statistics_text(ax1, stats_renamed, box_color='lightblue')
     
-    # Plot spike prediction history and batch difference
+    # Plot spike prediction history and batch difference (top-center and bottom-left)
+    differences = []
     if len(spike_preds_history) > 0:
         # Extract data once
         batch1_preds = [preds[0] for preds in spike_preds_history]
@@ -821,11 +849,11 @@ def plot_loss_and_spike_preds_history(loss_history, spike_preds_history,
         differences = [b2 - b1 for b1, b2 in zip(batch1_preds, batch2_preds)]
         iterations = range(len(spike_preds_history))
         
-        # Plot spike prediction history (ax2)
+        # Spike prediction history (top-center)
         ax2.plot(iterations, batch1_preds, linewidth=1.5, color='green', alpha=0.8, 
-                label='Batch 1 (Control)', marker='o', markersize=2)
+                 label='Batch 1 (Control)', marker='o', markersize=2)
         ax2.plot(iterations, batch2_preds, linewidth=1.5, color='red', alpha=0.8, 
-                label='Batch 2 (Stimulated)', marker='s', markersize=2)
+                 label='Batch 2 (Stimulated)', marker='s', markersize=2)
         _setup_plot_style(ax2, 'Spike Predictions Max History', 'Iteration', 'Max Spike Prediction', legend=True, legend_fontsize=9)
         
         # Add spike prediction statistics
@@ -839,9 +867,9 @@ def plot_loss_and_spike_preds_history(loss_history, spike_preds_history,
         }
         _add_statistics_text(ax2, spike_stats, box_color='lightgreen')
         
-        # Plot batch difference (ax3)
+        # Batch difference (bottom-left)
         ax3.plot(iterations, differences, linewidth=2, color='purple', alpha=0.8, 
-                marker='o', markersize=3, label='B2-B1 Difference')
+                 marker='o', markersize=3, label='B2-B1 Difference')
         ax3.axhline(y=0, color='black', linestyle='--', alpha=0.5, linewidth=1)
         _setup_plot_style(ax3, 'Batch Difference (B2-B1)', 'Iteration', 'Spike Prediction Difference', legend=True, legend_fontsize=9)
         
@@ -856,18 +884,65 @@ def plot_loss_and_spike_preds_history(loss_history, spike_preds_history,
             }
             _add_statistics_text(ax3, diff_stats_renamed, box_color='lightcoral')
     else:
-        # No data case
+        # No spike history data case
         ax2.text(0.5, 0.5, 'No data available', transform=ax2.transAxes, 
-                ha='center', va='center', fontsize=12)
+                 ha='center', va='center', fontsize=12)
         _setup_plot_style(ax2, 'Spike Predictions Max History', 'Iteration', 'Max Spike Prediction')
         
         ax3.text(0.5, 0.5, 'No data available', transform=ax3.transAxes, 
-                ha='center', va='center', fontsize=12)
+                 ha='center', va='center', fontsize=12)
         _setup_plot_style(ax3, 'Batch Difference (B2-B1)', 'Iteration', 'Spike Prediction Difference')
+    
+    # Correlation between batch difference and loss (top-right)
+    try:
+        if len(differences) > 0 and len(loss_history) > 0:
+            # Align lengths
+            n = min(len(differences), len(loss_history))
+            dif_arr = np.array(differences[:n])
+            loss_arr = np.array(loss_history[:n])
+            # Keep only non-negative differences for X-axis
+            mask = dif_arr >= 0
+            dif_arr = dif_arr[mask]
+            loss_arr = loss_arr[mask]
+            ax5.scatter(dif_arr, loss_arr, s=6, alpha=0.5, c='tab:purple', edgecolors='none')
+            _setup_plot_style(ax5, 'Corr: (B2-B1) vs Loss', 'B2-B1 Difference', 'Loss', grid=True)
+            ax5.set_xlim(left=0)
+            # Pearson r
+            if len(dif_arr) > 1:
+                r = np.corrcoef(dif_arr, loss_arr)[0, 1]
+                _add_statistics_text(ax5, {'r': f"{r:.4f}", 'N': len(dif_arr)}, box_color='lavender')
+        else:
+            ax5.text(0.5, 0.5, 'No data available', transform=ax5.transAxes, 
+                     ha='center', va='center', fontsize=12)
+            _setup_plot_style(ax5, 'Corr: (B2-B1) vs Loss', 'B2-B1 Difference', 'Loss')
+    except Exception:
+        ax5.text(0.5, 0.5, 'Correlation failed', transform=ax5.transAxes, 
+                 ha='center', va='center', fontsize=12)
+        _setup_plot_style(ax5, 'Corr: (B2-B1) vs Loss', 'B2-B1 Difference', 'Loss')
+    
+    # Gradient norm history (bottom-center)
+    if gradient_norm_history is not None and len(gradient_norm_history) > 0:
+        ax4.plot(gradient_norm_history, linewidth=1.5, color='green', alpha=0.8)
+        _setup_plot_style(ax4, 'Gradient Norm History', 'Iteration', 'Gradient Norm')
+        stats = _calculate_basic_stats(gradient_norm_history)
+        stats_renamed = {
+            'Final': stats['Final'], 
+            'Min': stats['Min'], 
+            'Max': stats['Max'],
+            'Mean': stats['Mean']
+        }
+        _add_statistics_text(ax4, stats_renamed, box_color='lightgreen')
+    else:
+        ax4.text(0.5, 0.5, 'No data available', transform=ax4.transAxes, 
+                 ha='center', va='center', fontsize=12)
+        _setup_plot_style(ax4, 'Gradient Norm History', 'Iteration', 'Gradient Norm')
+    
+    # Placeholder bottom-right (kept empty for balanced grid)
+    ax6.axis('off')
     
     plt.suptitle(title, fontsize=14, fontweight='bold')
     plt.tight_layout()
-    return _save_and_show_plot(fig, save_path, show_plot, message_prefix="Loss and spike prediction history")
+    return _save_and_show_plot(fig, save_path, show_plot, message_prefix="Loss, spike prediction and gradient history")
 
 def plot_firing_rates_evolution(firing_rates_history, num_segments_exc, num_segments_inh, 
                                time_duration_ms, input_window_size, monoconn_seg_indices, 
@@ -894,7 +969,7 @@ def plot_firing_rates_evolution(firing_rates_history, num_segments_exc, num_segm
         for time_idx in sample_times:
                 if time_idx < time_duration_ms:
                     values = [fr[0, segment_idx, time_idx] for fr in firing_rates_history]
-                ax.plot(range(0, len(firing_rates_history)*10, 10), values, 
+                ax.plot(range(0, len(firing_rates_history)), values, 
                            label=f'Time {time_idx}ms', linewidth=1.5, alpha=0.8)
             
         _setup_plot_style(ax, f'Exc Segment {segment_idx}', 'Iteration', 'Firing Rate', 
@@ -917,7 +992,7 @@ def plot_firing_rates_evolution(firing_rates_history, num_segments_exc, num_segm
         for time_idx in sample_times:
             if time_idx < time_duration_ms:
                 values = [fr[0, inh_segment_idx, time_idx] for fr in firing_rates_history]
-                ax.plot(range(0, len(firing_rates_history)*10, 10), values, 
+                ax.plot(range(0, len(firing_rates_history)*50, 50), values, 
                        label=f'Time {time_idx}ms', linewidth=1.5, alpha=0.8)
         
         _setup_plot_style(ax, f'Inh Segment {inh_segment_idx}', 'Iteration', 'Firing Rate', 
@@ -938,102 +1013,102 @@ def plot_firing_rates_evolution(firing_rates_history, num_segments_exc, num_segm
     
     return _save_and_show_plot(fig, save_path, show_plot, message_prefix="Firing rates evolution")
 
-def plot_optimization_summary(loss_history, firing_rates_history, num_segments_exc, 
-                             num_segments_inh, time_duration_ms, input_window_size,
-                             title="Optimization Summary", figsize=(20, 12), 
-                             save_path=None, show_plot=False):
-    """Plot optimization summary with multiple subplots"""
-    fig = plt.figure(figsize=figsize)
+# def plot_optimization_summary(loss_history, firing_rates_history, num_segments_exc, 
+#                              num_segments_inh, time_duration_ms, input_window_size,
+#                              title="Optimization Summary", figsize=(20, 12), 
+#                              save_path=None, show_plot=False):
+#     """Plot optimization summary with multiple subplots"""
+#     fig = plt.figure(figsize=figsize)
     
-    # Create grid layout
-    gs = fig.add_gridspec(3, 3, hspace=0.3, wspace=0.3)
+#     # Create grid layout
+#     gs = fig.add_gridspec(3, 3, hspace=0.3, wspace=0.3)
     
-    # 1. Loss history (top left, spans 2 rows)
-    ax1 = fig.add_subplot(gs[0:2, 0])
-    ax1.plot(loss_history, linewidth=2, color='blue', alpha=0.8)
-    _setup_plot_style(ax1, 'Loss History', 'Iteration', 'Loss')
+#     # 1. Loss history (top left, spans 2 rows)
+#     ax1 = fig.add_subplot(gs[0:2, 0])
+#     ax1.plot(loss_history, linewidth=2, color='blue', alpha=0.8)
+#     _setup_plot_style(ax1, 'Loss History', 'Iteration', 'Loss')
     
-    # 2. Firing rates evolution and distribution (top right and bottom right)
+#     # 2. Firing rates evolution and distribution (top right and bottom right)
 
-    if firing_rates_history:
-        # 2a. Firing rates evolution (top right, spans 2 rows)
-        ax2 = fig.add_subplot(gs[0:2, 1])
-        # Select representative segments
-        sample_segments = [0, num_segments_exc//2, num_segments_exc, 
-                         num_segments_exc + num_segments_inh//2]
-        sample_times = [input_window_size // 2]  # Only show key time points
+#     if firing_rates_history:
+#         # 2a. Firing rates evolution (top right, spans 2 rows)
+#         ax2 = fig.add_subplot(gs[0:2, 1])
+#         # Select representative segments
+#         sample_segments = [0, num_segments_exc//2, num_segments_exc, 
+#                          num_segments_exc + num_segments_inh//2]
+#         sample_times = [input_window_size // 2]  # Only show key time points
         
-        for segment_idx in sample_segments:
-            if segment_idx < len(firing_rates_history[0][0]):
-                values = [fr[0, segment_idx, sample_times[0]] for fr in firing_rates_history 
-                         if sample_times[0] < time_duration_ms]
-                if values:
-                    segment_type = "Exc" if segment_idx < num_segments_exc else "Inh"
-                    color = 'blue' if segment_idx < num_segments_exc else 'red'
-                    ax2.plot(range(0, len(values)*10, 10), values, 
-                            label=f'{segment_type} {segment_idx}', color=color, alpha=0.8)
+#         for segment_idx in sample_segments:
+#             if segment_idx < len(firing_rates_history[0][0]):
+#                 values = [fr[0, segment_idx, sample_times[0]] for fr in firing_rates_history 
+#                          if sample_times[0] < time_duration_ms]
+#                 if values:
+#                     segment_type = "Exc" if segment_idx < num_segments_exc else "Inh"
+#                     color = 'blue' if segment_idx < num_segments_exc else 'red'
+#                     ax2.plot(range(0, len(values)*50, 50), values, 
+#                             label=f'{segment_type} {segment_idx}', color=color, alpha=0.8)
         
-        _setup_plot_style(ax2, 'Firing Rates Evolution', 'Iteration', 'Firing Rate', legend=True, legend_fontsize=8)
+#         _setup_plot_style(ax2, 'Firing Rates Evolution', 'Iteration', 'Firing Rate', legend=True, legend_fontsize=8)
         
-        # 2b. Final firing rates distribution (bottom right)
-        ax3 = fig.add_subplot(gs[0:2, 2])
-        final_rates = firing_rates_history[-1][0]  # Take first sample from last batch
+#         # 2b. Final firing rates distribution (bottom right)
+#         ax3 = fig.add_subplot(gs[0:2, 2])
+#         final_rates = firing_rates_history[-1][0]  # Take first sample from last batch
         
-        # Distribution of excitatory and inhibitory segments
-        exc_rates = final_rates[:num_segments_exc, :]
-        inh_rates = final_rates[num_segments_inh:, :]
+#         # Distribution of excitatory and inhibitory segments
+#         exc_rates = final_rates[:num_segments_exc, :]
+#         inh_rates = final_rates[num_segments_inh:, :]
         
-        # Calculate mean firing rate for each segment
-        exc_means = np.mean(exc_rates, axis=1)
-        inh_means = np.mean(inh_rates, axis=1)
+#         # Calculate mean firing rate for each segment
+#         exc_means = np.mean(exc_rates, axis=1)
+#         inh_means = np.mean(inh_rates, axis=1)
         
-        # Plot distribution
-        ax3.hist(exc_means, bins=30, alpha=0.7, color='blue', label='Excitatory', density=True)
-        ax3.hist(inh_means, bins=30, alpha=0.7, color='red', label='Inhibitory', density=True)
-        _setup_plot_style(ax3, 'Final Firing Rates Distribution', 'Mean Firing Rate', 'Density', legend=True)
+#         # Plot distribution
+#         ax3.hist(exc_means, bins=30, alpha=0.7, color='blue', label='Excitatory', density=True)
+#         ax3.hist(inh_means, bins=30, alpha=0.7, color='red', label='Inhibitory', density=True)
+#         _setup_plot_style(ax3, 'Final Firing Rates Distribution', 'Mean Firing Rate', 'Density', legend=True)
     
-    # 3. Optimization statistics (bottom, spans 3 columns)
-    ax4 = fig.add_subplot(gs[2, :])
-    ax4.axis('off')
+#     # 3. Optimization statistics (bottom, spans 3 columns)
+#     ax4 = fig.add_subplot(gs[2, :])
+#     ax4.axis('off')
     
-    # Create statistics text - combine all conditions
-    stats_text = "Optimization Statistics:\n"
+#     # Create statistics text - combine all conditions
+#     stats_text = "Optimization Statistics:\n"
     
-    # Loss history statistics
-    if len(loss_history) > 0:
-        final_loss = loss_history[-1]
-        min_loss = min(loss_history)
-        improvement = loss_history[0] - final_loss
+#     # Loss history statistics
+#     if len(loss_history) > 0:
+#         final_loss = loss_history[-1]
+#         min_loss = min(loss_history)
+#         improvement = loss_history[0] - final_loss
         
-        # Add to plot
-        loss_stats_text = f"Final: {final_loss:.6f}\nMin: {min_loss:.6f}\nImp: {improvement:.6f}"
-        ax1.text(0.02, 0.98, loss_stats_text, transform=ax1.transAxes, fontsize=9,
-                verticalalignment='top', bbox=dict(boxstyle='round', facecolor='lightblue', alpha=0.8))
+#         # Add to plot
+#         loss_stats_text = f"Final: {final_loss:.6f}\nMin: {min_loss:.6f}\nImp: {improvement:.6f}"
+#         ax1.text(0.02, 0.98, loss_stats_text, transform=ax1.transAxes, fontsize=9,
+#                 verticalalignment='top', bbox=dict(boxstyle='round', facecolor='lightblue', alpha=0.8))
         
-        # Add to summary
-        stats_text += f"• Total Iterations: {len(loss_history)}\n"
-        stats_text += f"• Initial Loss: {loss_history[0]:.6f}\n"
-        stats_text += f"• Final Loss: {final_loss:.6f}\n"
-        stats_text += f"• Loss Improvement: {improvement:.6f}\n"
-        stats_text += f"• Convergence: {'Yes' if abs(final_loss - loss_history[-10]) < 1e-6 else 'Partial'}\n"
+#         # Add to summary
+#         stats_text += f"• Total Iterations: {len(loss_history)}\n"
+#         stats_text += f"• Initial Loss: {loss_history[0]:.6f}\n"
+#         stats_text += f"• Final Loss: {final_loss:.6f}\n"
+#         stats_text += f"• Loss Improvement: {improvement:.6f}\n"
+#         stats_text += f"• Convergence: {'Yes' if abs(final_loss - loss_history[-10]) < 1e-6 else 'Partial'}\n"
     
-    # Firing rates statistics
-    if firing_rates_history:
-        stats_text += f"• Firing Rates History Points: {len(firing_rates_history)}\n"
-        stats_text += f"• Segments: {num_segments_exc} (Exc) + {num_segments_inh} (Inh) = {num_segments_exc + num_segments_inh}\n"
-        stats_text += f"• Time Duration: {time_duration_ms} ms\n"
-        stats_text += f"• Input Window: {input_window_size} ms"
+#     # Firing rates statistics
+#     if firing_rates_history:
+#         stats_text += f"• Firing Rates History Points: {len(firing_rates_history)}\n"
+#         stats_text += f"• Segments: {num_segments_exc} (Exc) + {num_segments_inh} (Inh) = {num_segments_exc + num_segments_inh}\n"
+#         stats_text += f"• Time Duration: {time_duration_ms} ms\n"
+#         stats_text += f"• Input Window: {input_window_size} ms"
     
-    ax4.text(0.1, 0.5, stats_text, transform=ax4.transAxes, fontsize=11,
-            verticalalignment='center', bbox=dict(boxstyle='round', facecolor='lightgray', alpha=0.8))
+#     ax4.text(0.1, 0.5, stats_text, transform=ax4.transAxes, fontsize=11,
+#             verticalalignment='center', bbox=dict(boxstyle='round', facecolor='lightgray', alpha=0.8))
     
-    # Set overall title
-    fig.suptitle(title, fontsize=16, fontweight='bold')
+#     # Set overall title
+#     fig.suptitle(title, fontsize=16, fontweight='bold')
     
-    return _save_and_show_plot(fig, save_path, show_plot, message_prefix="Optimization summary")
+#     return _save_and_show_plot(fig, save_path, show_plot, message_prefix="Optimization summary")
 
 def create_optimization_report(loss_history, firing_rates_history, spike_preds_history,
-                               monoconn_seg_indices, num_segments_exc, num_segments_inh, 
+                               gradient_norm_history, monoconn_seg_indices, num_segments_exc, num_segments_inh, 
                               time_duration_ms, input_window_size,
                               save_dir, report_name="optimization_report"):
     """Create complete optimization report with all visualizations"""
@@ -1042,22 +1117,22 @@ def create_optimization_report(loss_history, firing_rates_history, spike_preds_h
     #print(f"Starting optimization report generation: {report_name}")
     
     
-    # 1. Loss and spike predictions history (if available)
-    if spike_preds_history:
+    # 1. Loss, spike predictions history and gradient norm (2x2 combined)
+    if spike_preds_history or gradient_norm_history:
         plot_loss_and_spike_preds_history(
-            loss_history, spike_preds_history,
-            save_path=os.path.join(save_dir, f'loss_and_spike_preds_history.png')
+            loss_history, spike_preds_history, gradient_norm_history,
+            save_path=os.path.join(save_dir, f'loss_spike_grad_history.png')
         )
     
-    # 2. Firing rates evolution
-    if firing_rates_history:
-        plot_firing_rates_evolution(
-            firing_rates_history, num_segments_exc, num_segments_inh,
-            time_duration_ms, input_window_size, monoconn_seg_indices,
-            save_path=os.path.join(save_dir, f'firing_rates_evolution.png')
-        )
+    # # 2. Firing rates evolution
+    # if firing_rates_history:
+    #     plot_firing_rates_evolution(
+    #         firing_rates_history, num_segments_exc, num_segments_inh,
+    #         time_duration_ms, input_window_size, monoconn_seg_indices,
+    #         save_path=os.path.join(save_dir, f'firing_rates_evolution.png')
+    #     )
     
-    # # 3. Optimization summary
+    # # 4. Optimization summary
     # plot_optimization_summary(
     #     loss_history, firing_rates_history, num_segments_exc, num_segments_inh,
     #     time_duration_ms, input_window_size,
@@ -1066,7 +1141,7 @@ def create_optimization_report(loss_history, firing_rates_history, spike_preds_h
     
     initial_firing_rates = firing_rates_history[0]
     optimized_firing_rates = firing_rates_history[-1]
-    # 4. Optimized firing rates visualization
+    # 5. Optimized firing rates visualization
     visualize_optimized_firing_rates(
         initial_firing_rates, optimized_firing_rates, 
         monoconn_seg_indices, 
@@ -1074,7 +1149,7 @@ def create_optimization_report(loss_history, firing_rates_history, spike_preds_h
         save_dir, title_prefix=f"{report_name.title()} - Optimized"
     )
 
-    print("Optimization report completed")
+    print("Optimization report completed \n")
     
     return save_dir
     
