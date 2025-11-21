@@ -66,13 +66,13 @@ class TCNPoissonModel(nn.Module):
         for param in self.tcn_model.parameters():
             param.requires_grad = False
     
-    def forward(self, firing_rates, fixed_exc_indices=None):
+    def forward(self, firing_rates, monoconn_seg_indices=None):
         """
         Forward pass: firing rates -> Poisson spikes -> TCN prediction
         
         Args:
             firing_rates: (batch_size, num_segments_total, time_duration_ms) torch tensor
-            fixed_exc_indices: Fixed excitatory indices for adding spikes
+            monoconn_seg_indices: Fixed excitatory indices for adding spikes
             
         Returns:
             spike_predictions: (batch_size*2, time_duration_ms, 1) torch tensor
@@ -103,16 +103,16 @@ class TCNPoissonModel(nn.Module):
         spike_trains = torch.cat([first_half_spikes, second_half_spikes], dim=0)
         
         # If no fixed excitatory indices specified, randomly select three
-        if fixed_exc_indices is None:
+        if monoconn_seg_indices is None:
             torch.manual_seed(42)  # For reproducibility
-            fixed_exc_indices = torch.randperm(self.num_segments_exc)[:3].cpu().numpy()
+            monoconn_seg_indices = torch.randperm(self.num_segments_exc)[:3].cpu().numpy()
         
         # Add fixed spikes to second half batch (at half window size)
         if batch_size > 0:
             spike_time_mono_syn = self.input_window_size // 2  # half window size time point
             if spike_time_mono_syn < self.time_duration_ms:
                 # Add spikes to specified three excitatory segments at half window size
-                for idx in fixed_exc_indices:
+                for idx in monoconn_seg_indices:
                     spike_trains[batch_size:, idx, spike_time_mono_syn] = 1.0
                     spike_trains[:batch_size:, idx, spike_time_mono_syn] = 0.0
         
@@ -124,13 +124,13 @@ class TCNPoissonModel(nn.Module):
         
         return spike_predictions, spike_trains
     
-    def predict_eval(self, firing_rates, fixed_exc_indices=None):
+    def predict_eval(self, firing_rates, monoconn_seg_indices=None):
         """
         Evaluation prediction (without gradients, using numpy Poisson)
         
         Args:
             firing_rates: (batch_size, num_segments_total, time_duration_ms)
-            fixed_exc_indices: Fixed excitatory indices for adding spikes
+            monoconn_seg_indices: Fixed excitatory indices for adding spikes
             
         Returns:
             spike_predictions: model predicted spike probabilities
@@ -159,16 +159,16 @@ class TCNPoissonModel(nn.Module):
         spike_trains = np.concatenate([first_half_spikes, second_half_spikes], axis=0)
         
         # If no fixed excitatory indices specified, randomly select three
-        if fixed_exc_indices is None:
+        if monoconn_seg_indices is None:
             mono_syn_rnd = np.random.default_rng(42)
-            fixed_exc_indices = mono_syn_rnd.choice(self.num_segments_exc, size=3, replace=False)
+            monoconn_seg_indices = mono_syn_rnd.choice(self.num_segments_exc, size=3, replace=False)
         
         # Add fixed spikes to second half batch (at half window size)
         if batch_size > 0:
             spike_time_mono_syn = self.input_window_size // 2  # half window size time point
             if spike_time_mono_syn < self.time_duration_ms:
                 # Add spikes to specified three excitatory segments at half window size
-                for idx in fixed_exc_indices:
+                for idx in monoconn_seg_indices:
                     spike_trains[batch_size:, idx, spike_time_mono_syn] = 1.0
         
         # Convert data format to match model input: (spike_batch_size, time_duration, num_segments)

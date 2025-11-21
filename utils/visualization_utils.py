@@ -198,9 +198,12 @@ def plot_summary_panels(fpr, tpr, desired_fp_ind, y_spikes_GT, y_spikes_hat,
 
     # ROC curve
     ax_roc = axes[0]
+    roc_auc = np.trapz(tpr, fpr)
     ax_roc.plot(fpr, tpr, 'k-', linewidth=2)
     ax_roc.plot(fpr[desired_fp_ind], tpr[desired_fp_ind], 'o', color='red', markersize=6)
     _setup_plot_style(ax_roc, '', 'False alarm rate', 'Hit rate', xlim=[0.0, 1.0], ylim=[0.0, 1.05], grid=False)
+    ax_roc.text(0.98, 0.9, f"AUC={roc_auc:.4f}", transform=ax_roc.transAxes,
+                ha='right', va='top', fontsize=11, color='dimgray')
     
     # Add zoomed inset
     axins = _setup_inset_axes(ax_roc, 
@@ -241,7 +244,7 @@ def plot_summary_panels(fpr, tpr, desired_fp_ind, y_spikes_GT, y_spikes_hat,
         x, y = x[idx], y[idx]
     
     ax_scatter.scatter(x, y, s=4, c='tab:blue', alpha=0.25, edgecolors='none')
-    _setup_plot_style(ax_scatter, '', 'L5PC Model (mV)', 'ANN (mV)', xlim=(-80, -57), ylim=(-80, -57), grid=False)
+    _setup_plot_style(ax_scatter, '', 'L5PC Model (mV)', 'ANN (mV)', grid=False)# xlim=(-80, -57), ylim=(-80, -57), grid=False)
 
     return _save_and_show_plot(fig, save_path, show_plot=False, message_prefix="Summary panels")
 
@@ -328,11 +331,11 @@ def plot_voltage_traces(y_spikes_GT, y_spikes_hat, y_voltage_GT, y_voltage_hat,
 
     # Save figures
     if num_pages == 1:
-        save_path = f'{output_dir}/voltage_traces.png'
+        save_path = f'{output_dir}/voltage_traces.pdf'
         _save_and_show_plot(figs[0], save_path, show_plot=False, message_prefix="Voltage traces")
     else:
         for idx, fig in enumerate(figs, start=1):
-            save_path = f'{output_dir}/voltage_traces_p{idx}.png'
+            save_path = f'{output_dir}/voltage_traces_p{idx}.pdf'
             _save_and_show_plot(fig, save_path, show_plot=False, message_prefix="Voltage traces")
 
 
@@ -749,7 +752,20 @@ def _plot_combined_heatmap(initial_sample, optimized_sample, num_exc_segments, n
     plt.tight_layout()
     plt.subplots_adjust(top=0.93)
     
-    return _save_and_show_plot(fig, save_path, show_plot=False, message_prefix="Combined heatmap")
+    # Save the plot
+    _save_and_show_plot(fig, save_path, show_plot=False, message_prefix="Combined heatmap")
+    
+    # Return the four heatmap data arrays
+    return {
+        'initial_exc_data': exc_data,
+        'optimized_exc_data': opt_exc_data, 
+        'initial_inh_data': inh_data,
+        'optimized_inh_data': opt_inh_data,
+        'exc_indices': exc_indices,
+        'opt_exc_indices': opt_exc_indices,
+        'inh_indices': inh_indices,
+        'opt_inh_indices': opt_inh_indices
+    }
 
 def visualize_optimized_firing_rates(initial_firing_rates, optimized_firing_rates, monoconn_seg_indices, 
                                    num_exc_segments=639, num_inh_segments=640,
@@ -781,7 +797,7 @@ def visualize_optimized_firing_rates(initial_firing_rates, optimized_firing_rate
         specified_segments = extended_indices
         
     # # Combined trace - 2x2 subplots
-    # combined_trace_save_path = os.path.join(save_dir, 'combined_firing_rate_trace.png')
+    # combined_trace_save_path = os.path.join(save_dir, 'combined_firing_rate_trace.pdf')
     # _plot_combined_trace(
     #     initial_sample, optimized_sample, 
     #     num_exc_segments, num_inh_segments,
@@ -790,8 +806,8 @@ def visualize_optimized_firing_rates(initial_firing_rates, optimized_firing_rate
     # )
     
     # Combined heatmap - 2x2 subplots
-    combined_heatmap_save_path = os.path.join(save_dir, 'combined_firing_rate_heatmap.png')
-    _plot_combined_heatmap(
+    combined_heatmap_save_path = os.path.join(save_dir, 'combined_firing_rate_heatmap.pdf')
+    heatmap_data = _plot_combined_heatmap(
         initial_sample, optimized_sample, 
         num_exc_segments, num_inh_segments,
         specified_segments, monoconn_seg_indices,
@@ -799,6 +815,90 @@ def visualize_optimized_firing_rates(initial_firing_rates, optimized_firing_rate
     )
     
     print("Optimized firing rates visualization completed")
+    return heatmap_data
+
+def plot_average_heatmap(average_heatmap_data, monoconn_seg_indices, 
+                        num_exc_segments=639, num_inh_segments=640,
+                        save_path=None, title_prefix="Average Heatmap"):
+    """Plot average heatmap from multiple seeds"""
+    
+    # Create 2x2 subplots
+    fig, axes = plt.subplots(2, 2, figsize=(32, 16))
+    
+    # Extract data
+    exc_data = average_heatmap_data['initial_exc_data']
+    opt_exc_data = average_heatmap_data['optimized_exc_data']
+    inh_data = average_heatmap_data['initial_inh_data']
+    opt_inh_data = average_heatmap_data['optimized_inh_data']
+    
+    exc_indices = average_heatmap_data['exc_indices']
+    opt_exc_indices = average_heatmap_data['opt_exc_indices']
+    inh_indices = average_heatmap_data['inh_indices']
+    opt_inh_indices = average_heatmap_data['opt_inh_indices']
+    
+    exc_to_show = len(exc_indices)
+    opt_exc_to_show = len(opt_exc_indices)
+    inh_to_show = len(inh_indices)
+    opt_inh_to_show = len(opt_inh_indices)
+    
+    # Top left: Initial Excitatory
+    ax1 = axes[0, 0]
+    exc_vmin, exc_vmax = 0, 0.3
+    im1 = ax1.imshow(exc_data, aspect='auto', cmap='Blues', origin='lower', 
+                     vmin=exc_vmin, vmax=exc_vmax)
+    cbar1 = plt.colorbar(im1, ax=ax1)
+    cbar1.set_label('Excitatory Firing Rate', rotation=270, labelpad=15, color='blue')
+    cbar1.ax.tick_params(colors='blue')
+    
+    _setup_plot_style(ax1, f'Initial - Excitatory (n={exc_to_show})', 'Time (ms)', 'Excitatory Segments', fontsize=12)
+    ax1.tick_params(axis='y', colors='blue')
+    _setup_y_axis_ticks(ax1, exc_indices, 'Exc', exc_to_show, monoconn_seg_indices)
+    
+    # Top right: Optimized Excitatory
+    ax2 = axes[0, 1]
+    im2 = ax2.imshow(opt_exc_data, aspect='auto', cmap='Blues', origin='lower', 
+                     vmin=exc_vmin, vmax=exc_vmax)
+    cbar2 = plt.colorbar(im2, ax=ax2)
+    cbar2.set_label('Excitatory Firing Rate', rotation=270, labelpad=15, color='blue')
+    cbar2.ax.tick_params(colors='blue')
+    
+    _setup_plot_style(ax2, f'Optimized - Excitatory (n={opt_exc_to_show})', 'Time (ms)', 'Excitatory Segments', fontsize=12)
+    ax2.tick_params(axis='y', colors='blue')
+    _setup_y_axis_ticks(ax2, opt_exc_indices, 'Exc', opt_exc_to_show, monoconn_seg_indices)
+    
+    # Bottom left: Initial Inhibitory
+    ax3 = axes[1, 0]
+    inh_vmin, inh_vmax = 0, 0.02
+    im3 = ax3.imshow(inh_data, aspect='auto', cmap='Reds', origin='lower', 
+                     vmin=inh_vmin, vmax=inh_vmax)
+    cbar3 = plt.colorbar(im3, ax=ax3)
+    cbar3.set_label('Inhibitory Firing Rate', rotation=270, labelpad=15, color='red')
+    cbar3.ax.tick_params(colors='red')
+    
+    _setup_plot_style(ax3, f'Initial - Inhibitory (n={inh_to_show})', 'Time (ms)', 'Inhibitory Segments', fontsize=12)
+    ax3.tick_params(axis='y', colors='red')
+    _setup_y_axis_ticks(ax3, inh_indices, 'Inh', inh_to_show, monoconn_seg_indices)
+    
+    # Bottom right: Optimized Inhibitory
+    ax4 = axes[1, 1]
+    im4 = ax4.imshow(opt_inh_data, aspect='auto', cmap='Reds', origin='lower', 
+                     vmin=inh_vmin, vmax=inh_vmax)
+    cbar4 = plt.colorbar(im4, ax=ax4)
+    cbar4.set_label('Inhibitory Firing Rate', rotation=270, labelpad=15, color='red')
+    cbar4.ax.tick_params(colors='red')
+    
+    _setup_plot_style(ax4, f'Optimized - Inhibitory (n={opt_inh_to_show})', 'Time (ms)', 'Inhibitory Segments', fontsize=12)
+    ax4.tick_params(axis='y', colors='red')
+    _setup_y_axis_ticks(ax4, opt_inh_indices, 'Inh', opt_inh_to_show, monoconn_seg_indices)
+    
+    # Set overall title
+    fig.suptitle(f'{title_prefix} - Average Across Seeds', fontsize=16, fontweight='bold')
+    
+    # Adjust layout
+    plt.tight_layout()
+    plt.subplots_adjust(top=0.93)
+    
+    return _save_and_show_plot(fig, save_path, show_plot=False, message_prefix="Average heatmap")
     
 def plot_gradient_norm_history(gradient_norm_history, title="Gradient Norm History",
                                figsize=(10, 6), save_path=None, show_plot=False):
@@ -1121,7 +1221,7 @@ def create_optimization_report(loss_history, firing_rates_history, spike_preds_h
     if spike_preds_history or gradient_norm_history:
         plot_loss_and_spike_preds_history(
             loss_history, spike_preds_history, gradient_norm_history,
-            save_path=os.path.join(save_dir, f'loss_spike_grad_history.png')
+            save_path=os.path.join(save_dir, f'loss_spike_grad_history.pdf')
         )
     
     # # 2. Firing rates evolution
@@ -1129,20 +1229,20 @@ def create_optimization_report(loss_history, firing_rates_history, spike_preds_h
     #     plot_firing_rates_evolution(
     #         firing_rates_history, num_segments_exc, num_segments_inh,
     #         time_duration_ms, input_window_size, monoconn_seg_indices,
-    #         save_path=os.path.join(save_dir, f'firing_rates_evolution.png')
+    #         save_path=os.path.join(save_dir, f'firing_rates_evolution.pdf')
     #     )
     
     # # 4. Optimization summary
     # plot_optimization_summary(
     #     loss_history, firing_rates_history, num_segments_exc, num_segments_inh,
     #     time_duration_ms, input_window_size,
-    #     save_path=os.path.join(save_dir, f'summary.png')
+    #     save_path=os.path.join(save_dir, f'summary.pdf')
     # )
     
     initial_firing_rates = firing_rates_history[0]
     optimized_firing_rates = firing_rates_history[-1]
     # 5. Optimized firing rates visualization
-    visualize_optimized_firing_rates(
+    heatmap_data = visualize_optimized_firing_rates(
         initial_firing_rates, optimized_firing_rates, 
         monoconn_seg_indices, 
         num_segments_exc, num_segments_inh,
@@ -1151,5 +1251,5 @@ def create_optimization_report(loss_history, firing_rates_history, spike_preds_h
 
     print("Optimization report completed \n")
     
-    return save_dir
+    return heatmap_data
     

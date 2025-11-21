@@ -34,7 +34,10 @@ def find_best_model(models_dir):
             if min_val_loss < best_val_loss:
                 best_val_loss = min_val_loss
                 best_params_path = pickle_path
-                best_model_path = pickle_path.replace('.pickle', '.pt')
+                if 'torch' in pickle_path:
+                    best_model_path = pickle_path.replace('.pickle', '.pt')
+                else:
+                    best_model_path = pickle_path.replace('.pickle', '.h5')
         
         except Exception as e:
             print(f"Error reading {pickle_path}: {e}")

@@ -1,5 +1,6 @@
 import numpy as np
 import os
+import matplotlib.pyplot as plt
 from utils.visualization_utils import visualize_firing_rates_trace, visualize_firing_rates_heatmap
 
 def load_and_visualize_firing_rates(npy_file_path, num_exc_segments=639, save_dir=None):
@@ -79,7 +80,7 @@ def load_and_visualize_firing_rates(npy_file_path, num_exc_segments=639, save_di
     
     # 1. 生成类似raster plot的可视化
     print(f"\n正在生成类似raster plot的可视化...")
-    raster_save_path = os.path.join(save_dir, f"{base_name}_raster_plot.png")
+    raster_save_path = os.path.join(save_dir, f"{base_name}_raster_plot.pdf")
     
     try:
         visualize_firing_rates_trace(
@@ -97,7 +98,7 @@ def load_and_visualize_firing_rates(npy_file_path, num_exc_segments=639, save_di
     
     # 2. 生成热图可视化
     print(f"\n正在生成热图可视化...")
-    heatmap_save_path = os.path.join(save_dir, f"{base_name}_heatmap.png")
+    heatmap_save_path = os.path.join(save_dir, f"{base_name}_heatmap.pdf")
     
     try:
         visualize_firing_rates_heatmap(
@@ -132,7 +133,7 @@ def create_time_statistics_plot(firing_rates, num_exc_segments, save_path, base_
     """
     创建时间序列统计图，显示兴奋性和抑制性segments随时间的平均firing rate变化
     """
-    import matplotlib.pyplot as plt
+    
     
     num_segments, time_duration = firing_rates.shape
     

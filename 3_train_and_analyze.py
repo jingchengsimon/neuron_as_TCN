@@ -18,6 +18,23 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.cuda as cuda
 
+def lr_warmup_decay(epoch, lr):
+    """
+    学习率warmup和decay调度
+    与TF版本保持一致：使用硬编码的init_lr和max_lr，忽略传入的lr参数
+    已根据batch_size=32调整（从8增加到32，学习率×2）
+    """
+    warmup_epochs = 10
+    init_lr = 0.0002  # 从0.0001增加到0.0002 (×2 for batch_size=32)
+    max_lr = 0.002    # 从0.001增加到0.002 (×2 for batch_size=32)
+    decay_rate = 0.95
+    if epoch < warmup_epochs:
+        # 线性warmup
+        return init_lr + (max_lr - init_lr) * (epoch + 1) / warmup_epochs
+    else:
+        # 衰减
+        return max_lr * (decay_rate ** (epoch - warmup_epochs))
+
 def train_and_save(network_depth, num_filters_per_layer, input_window_size, num_epochs, 
                    train_data_dir, valid_data_dir, test_data_dir, models_dir,
                    use_improved_initialization=False, use_improved_sampling=False, spike_rich_ratio=0.5):
@@ -44,30 +61,27 @@ def train_and_save(network_depth, num_filters_per_layer, input_window_size, num_
     train_files_per_epoch = 6 # 4  # 减少训练文件数量
     valid_files_per_epoch = 2 #max(1, int(validation_fraction * train_files_per_epoch))
 
-    batch_size_per_epoch        = [8] * num_epochs   # 16 # 减少批次大小从32到16
-    learning_rate_per_epoch     = [0.0001] * len(batch_size_per_epoch)
-    loss_weights_per_epoch      = [[1.0, 0.01]] * num_epochs # [[1.0, 0.0200]] * num_epochs # Even higher spike weight
-    num_train_steps_per_epoch   = [100] * num_epochs  # 减少训练步数
+    # 增加batch_size以减少每个epoch的batch数量（保持窗口大小80不变）
+    # batch_size=32 -> batches_per_epoch约减至1/4（从11250到约2812）
+    # 学习率已根据batch_size=32调整（从8增加到32，学习率×2，使用平方根缩放）
+    batch_size = 32
+    batch_size_per_epoch = [batch_size] * num_epochs
+    learning_rate_per_epoch = [0.0002] * num_epochs  # 初始学习率 (0-40 epochs)
+    loss_weights_per_epoch = [[1.0, 0.02]] * num_epochs # [1.0, 0.01]
+    num_train_steps_per_epoch = [100] * num_epochs
 
-    for i in range(40,num_epochs):
-        batch_size_per_epoch[i]    = 8
-        learning_rate_per_epoch[i] = 0.00003
-        loss_weights_per_epoch[i]  = [2.0, 0.005] # [2.0, 0.0100]
-        
-    for i in range(80,num_epochs):
-        batch_size_per_epoch[i]    = 8
-        learning_rate_per_epoch[i] = 0.00001
-        loss_weights_per_epoch[i]  = [3.0, 0.002] # [4.0, 0.0100]
-
-    for i in range(120,num_epochs):
-        batch_size_per_epoch[i]    = 8
-        learning_rate_per_epoch[i] = 0.000003
-        loss_weights_per_epoch[i]  = [4.0, 0.001] # [8.0, 0.0100]
-
-    for i in range(160,num_epochs):
-        batch_size_per_epoch[i]    = 8
-        learning_rate_per_epoch[i] = 0.000001
-        loss_weights_per_epoch[i]  = [5.0, 0.001] # [9.0, 0.0030]
+    # 训练阶段配置：(起始epoch, 学习率, 损失权重)
+    training_stages = [
+        (40, 0.00006, [2.0, 0.01]), # [2.0, 0.005]
+        (80, 0.00002, [4.0, 0.01]), # [4.0, 0.002]
+        (120, 0.000006, [8.0, 0.01]), # [8.0, 0.001]
+        (160, 0.000002, [9.0, 0.003]), # [16.0, 0.001]
+    ]
+    
+    for start_epoch, lr, loss_weights in training_stages:
+        for i in range(start_epoch, num_epochs):
+            learning_rate_per_epoch[i] = lr
+            loss_weights_per_epoch[i] = loss_weights
 
     learning_schedule_dict = {}
     learning_schedule_dict['train_file_load']           = train_file_load
@@ -83,20 +97,12 @@ def train_and_save(network_depth, num_filters_per_layer, input_window_size, num_
     # ------------------------------------------------------------------
     # define network architecture params
     # ------------------------------------------------------------------
-
-    num_segments_exc  = 639 # 10042 + 16070
-    if 'SJC' in train_data_dir:
-        num_segments_inh  = 640 # 1023 + 1637 + 150 
-    else:
-        num_segments_inh  = 639 # 1023 + 1637 + 150 
-
     filter_sizes_per_layer = [54] + [24] * (network_depth - 1)
     initializer_per_layer         = [0.002] * network_depth
     activation_function_per_layer = ['relu'] * network_depth
     l2_regularization_per_layer   = [1e-6] * network_depth # 1e-8
     strides_per_layer             = [1] * network_depth
     dilation_rates_per_layer      = [1] * network_depth
-
 
     architecture_dict = {}
     architecture_dict['network_depth']                 = network_depth
@@ -130,6 +136,25 @@ def train_and_save(network_depth, num_filters_per_layer, input_window_size, num_
     print('number of test files is %d' %(len(test_files)))
     print('-----------------------------------------------')
 
+    
+    # num_segments_exc  = 639 # 10042 + 16070
+    # if 'SJC' in train_data_dir:
+    #     num_segments_inh  = 640 # 1023 + 1637 + 150 
+    # else:
+    #     num_segments_inh  = 639 # 1023 + 1637 + 150 
+    sample_file = train_files[0]
+    with open(sample_file, 'rb') as f:
+        sample_data = pickle.load(f)
+
+    # 从数据中提取突触数量
+    if 'allSegmentsType' in sample_data['Params']:  # 原始L5PC模型
+        num_segments_exc = len(sample_data['Params']['allSegmentsType'])
+        num_segments_inh = len(sample_data['Params']['allSegmentsType'])
+    else:  # IF模型或SJC模型
+        num_segments_exc = len(sample_data['Results']['listOfSingleSimulationDicts'][0]['exInputSpikeTimes'])
+        num_segments_inh = len(sample_data['Results']['listOfSingleSimulationDicts'][0]['inhInputSpikeTimes'])
+
+    print(f'Detected from data: num_segments_exc = {num_segments_exc}, num_segments_inh = {num_segments_inh}')
     
     assert(input_window_size > sum(filter_sizes_per_layer))
     temporal_conv_net = TCNModel(input_window_size, num_segments_exc, num_segments_inh, 
@@ -231,6 +256,18 @@ def train_and_save(network_depth, num_filters_per_layer, input_window_size, num_
         val_epoch_soma_losses = []
 
         for mini_epoch in range(num_steps_multiplier):
+            # Apply learning rate warmup/decay scheduling (matching TF version)
+            # Calculate current learning rate based on mini_epoch within current learning_schedule
+            # TF version uses lr_warmup_decay(epoch, lr) where epoch is the mini-epoch index
+            # Note: TF version uses hardcoded init_lr=0.0001 and max_lr=0.001, ignoring the lr parameter
+            current_lr = lr_warmup_decay(mini_epoch, learning_rate)
+            for g in optimizer.param_groups:
+                g['lr'] = current_lr
+            
+            # Log learning rate for first mini_epoch of each learning_schedule
+            if mini_epoch == 0:
+                print(f'Learning rate for mini_epoch {mini_epoch+1}: {current_lr:.7f} (base_lr was {learning_rate:.7f})')
+            
             # Train one "mini-epoch" (aligned with Keras epochs=num_steps_multiplier)
             temporal_conv_net.train()
             running_spike, running_soma, running_total = 0.0, 0.0, 0.0
@@ -239,7 +276,7 @@ def train_and_save(network_depth, num_filters_per_layer, input_window_size, num_
             if cuda.is_available():
                 cuda.empty_cache()
             
-            for step in tqdm(range(train_steps_per_epoch), desc=f"Train {learning_schedule+1}/{num_epochs} e{mini_epoch+1}/{num_steps_multiplier}", leave=False):
+            for step in tqdm(range(train_steps_per_epoch), desc=f"Train {learning_schedule+1}/{num_epochs} epoch {mini_epoch+1}/{num_steps_multiplier}", leave=False):
                 X_batch, targets = train_data_generator[step]
                 y_spike_batch, y_soma_batch = targets
                 
@@ -353,7 +390,7 @@ def train_and_save(network_depth, num_filters_per_layer, input_window_size, num_
         print('-----------------------------------------------------------------------------------------')
         
         # save model every once and a while
-        if np.array(training_history_dict['val_spikes_loss'][-3:]).mean() < 0.05:
+        if np.array(training_history_dict['val_spikes_loss'][-3:]).mean() < 0.03:
             model_ID = np.random.randint(100000)
             modelID_str = 'ID_%d' %(model_ID)
             train_string = 'samples_%d' %(num_training_samples)
@@ -446,11 +483,11 @@ def main():
     print("==================\n")
 
     # 1. Define hyperparameter grid
-    network_depth_list = [7]
-    num_filters_per_layer_list = [256]  # Other parameters can be fixed or adjusted
-    input_window_size_list = [400]  # Traverse different input_window_size here
+    network_depth_list = [1]
+    num_filters_per_layer_list = [1]  # Other parameters can be fixed or adjusted
+    input_window_size_list = [80]  # Traverse different input_window_size here
 
-    num_epochs = 250
+    num_epochs = 200
 
     # Configure improvement options
     use_improved_initialization = False   # Set to True to enable improved initialization strategy
@@ -469,26 +506,33 @@ def main():
         Dynamically build analysis suffix
         Extract part after underscore from model suffix and combine with test suffix
         """
-        if test_suffix.startswith('_'):
-            test_suffix = test_suffix[1:]
+        if 'IF_model' in model_suffix:
+            analysis_suffix = 'IF_model'
         else:
-            test_suffix = 'original' 
-    
-        # Extract part after underscore from model suffix
-        if '_' in model_suffix:
-            model_part = model_suffix.split('_', 1)[1]  # Get part after first underscore
-        else:
-            model_part = model_suffix
+            if test_suffix.startswith('_'):
+                test_suffix = test_suffix[1:]
+            else:
+                test_suffix = 'original' 
         
-        # Combine into analysis suffix
-        analysis_suffix = f"{test_suffix}_{model_part}"
+            # Extract part after underscore from model suffix
+            if '_' in model_suffix:
+                model_part = model_suffix.split('_', 1)[1]  # Get part after first underscore
+            else:
+                model_part = model_suffix
+            
+            # Combine into analysis suffix
+            analysis_suffix = f"{test_suffix}_{model_part}"
         return analysis_suffix
 
     # Basic configuration
     test_suffix = '' #'_SJC_funcgroup2_var2'
-    base_path = '/G/results/aim2_sjc/Models_TCN/Single_Neuron_InOut' + test_suffix
-    data_suffix = 'L5PC_NMDA'
-    model_suffix = 'NMDA_torch_2'
+    # base_path = '/G/results/aim2_sjc/Models_TCN/Single_Neuron_InOut' + test_suffix
+    # data_suffix = 'L5PC_NMDA'
+    # model_suffix = 'NMDA_torch_2'
+
+    base_path = '/G/results/aim2_sjc/Models_TCN/IF_model_InOut' + test_suffix
+    data_suffix = 'IF_model' 
+    model_suffix = 'IF_model_torch' 
     
     # Dynamically build analysis suffix
     analysis_suffix = build_analysis_suffix(test_suffix, model_suffix)

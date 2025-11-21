@@ -88,6 +88,7 @@ def parse_sim_experiment_file(sim_experiment_file, print_logs=False):
     else: # model_aim1_sjc
         num_segments_exc  = len(experiment_dict['Results']['listOfSingleSimulationDicts'][0]['exInputSpikeTimes'])
         num_segments_inh  = len(experiment_dict['Results']['listOfSingleSimulationDicts'][0]['inhInputSpikeTimes'])
+
     if 'totalSimDurationInSec' in experiment_dict['Params']:
         sim_duration_ms = experiment_dict['Params']['totalSimDurationInSec'] * 1000
     else:

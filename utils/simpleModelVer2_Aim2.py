@@ -202,7 +202,7 @@ def run_simulation_batch(num_runs=2, epoch=1, rebuild_cell=False):
         print(f"使用epoch={epoch}作为随机种子...")
         
         for run_idx in range(num_runs):
-            if (run_idx+1) % 10 == 0:
+            if (run_idx+1) % 50 == 0:
                 print(f"  执行第 {run_idx+1}/{num_runs} 次运行")
             params = generate_simu_params_REAL('clus')[0]
             params['epoch'] = epoch  # 使用外部传入的epoch作为随机种子

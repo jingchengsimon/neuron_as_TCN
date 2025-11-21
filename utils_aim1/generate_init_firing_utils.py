@@ -56,8 +56,9 @@ def generate_init_firing(section_synapse_df, DURATION, FREQ_EXC, FREQ_INH,
         list(executor.map(process_section, range(num_syn_bg_exc)))
         # executor.map(process_section, range(num_syn_bg_exc))
 
-    inh_firing_rate_array[1:] = FREQ_INH/1000 * exc_firing_rate_array/np.mean(exc_firing_rate_array)
-    inh_firing_rate_array[0] = FREQ_INH/1000 * exc_firing_rate_array[0]/np.mean(exc_firing_rate_array) # np.mean(exc_firing_rate_array[0])
+    inh_delay = 4
+    inh_firing_rate_array[1:,inh_delay:] = FREQ_INH/1000 * exc_firing_rate_array[:,:DURATION-inh_delay]/np.mean(exc_firing_rate_array[:,:DURATION-inh_delay])
+    inh_firing_rate_array[0,inh_delay:] = FREQ_INH/1000 * exc_firing_rate_array[0,:DURATION-inh_delay]/np.mean(exc_firing_rate_array[:,:DURATION-inh_delay]) # np.mean(exc_firing_rate_array[0])
 
     return exc_firing_rate_array, inh_firing_rate_array
 

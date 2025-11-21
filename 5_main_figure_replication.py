@@ -178,6 +178,7 @@ class MainFigureReplication:
         print('Predicting using model...')
         start_time = time.time()
         y_train_soma_bias = -67.7
+        
         X_test_for_TCN = np.transpose(X_test, axes=[2, 1, 0])
         y1_test_for_TCN = y_spike_test.T[:, :, np.newaxis]
         y2_test_for_TCN = y_soma_test.T[:, :, np.newaxis] - y_train_soma_bias
@@ -313,7 +314,7 @@ class MainFigureReplication:
             roc_metrics["fpr"], roc_metrics["tpr"], roc_metrics["desired_fp_ind"],
             y_spikes_GT_eval, y_spikes_hat_eval,
             y_soma_GT_eval + y_train_soma_bias, y_soma_hat_eval + y_train_soma_bias, 
-            roc_metrics["threshold"], save_path=f'{output_dir}/summary_panels.png'
+            roc_metrics["threshold"], save_path=f'{output_dir}/summary_panels.pdf'
         )
         
         # Select display samples
@@ -503,7 +504,7 @@ def main(models_dir, data_dir, model_string='NMDA', model_size='large', desired_
 if __name__ == "__main__":
     data_suffix = 'NMDA'
     base_path = '/G/results/aim2_sjc/Models_TCN/Single_Neuron_InOut_SJC_funcgroup2_var2/'
-    models_dir = base_path + f'models/{data_suffix}_torch/'
+    models_dir = base_path + f'models/{data_suffix}_torch_2/'
     data_dir = base_path + 'data/'
     desired_fpr = 0.002
     

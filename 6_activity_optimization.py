@@ -1,11 +1,11 @@
-import os
 import gc
+import os
 import numpy as np
 import torch
 import pickle
 from utils.tcn_poisson_model import TCNPoissonModel
 from utils.find_best_model import find_best_model
-from utils.visualization_utils import create_optimization_report
+from utils.visualization_utils import create_optimization_report, plot_average_heatmap
 from utils.simpleModelVer2_Aim2 import run_simulation_batch
 
 def convert_to_preferred_type(data, use_torch=True, device=None, dtype=torch.float32):
@@ -376,47 +376,63 @@ class ActivityOptimizer:
         spike_preds_history = []
         gradient_norm_history = []
 
+        # 梯度累积参数
+        accumulation_steps = 2  # 每2步累积一次梯度
+        
         for epoch in range(num_iterations):
-
-            optimizer.zero_grad()
+            # 只在累积步骤开始时清零梯度
+            if epoch % accumulation_steps == 0:
+                optimizer.zero_grad()
+                
             spike_preds, _ = self.tcn_poisson_model(firing_rates, self.monoconn_seg_indices)
             loss, spike_preds_max = self.compute_loss(spike_preds, target_spike_prob)
+            
+            # 缩放损失以适应梯度累积
+            loss = loss / accumulation_steps
 
-            batch1_max = torch.mean(torch.max(spike_preds_max[:batch_size], dim=1)[0]).detach().cpu().numpy().item()      
-            batch2_max = torch.mean(torch.max(spike_preds_max[batch_size:], dim=1)[0]).detach().cpu().numpy().item()
+            batch1_max = torch.mean(torch.max(spike_preds_max[:batch_size//2], dim=1)[0]).detach().cpu().numpy().item()      
+            batch2_max = torch.mean(torch.max(spike_preds_max[batch_size//2:], dim=1)[0]).detach().cpu().numpy().item()
 
             # Backward propagation
             loss.backward()
-            # torch.nn.utils.clip_grad_norm_([firing_rates], max_norm=2.0) # Gradient clipping (optional)
+            
+            # 只在累积步骤结束时更新参数
+            if (epoch + 1) % accumulation_steps == 0:
+                # torch.nn.utils.clip_grad_norm_([firing_rates], max_norm=2.0) # Gradient clipping (optional)
+                
+                # Calculate gradient norm
+                grad_norm = torch.norm(firing_rates.grad).item()
+                gradient_norm_history.append(grad_norm)
 
-            # Calculate gradient norm
-            grad_norm = torch.norm(firing_rates.grad).item()
-            gradient_norm_history.append(grad_norm)
-
-            optimizer.step()
-            scheduler.step(loss.item())
+                optimizer.step()
+                scheduler.step(loss.item() * accumulation_steps)  # 恢复原始损失值用于调度器
 
             # After updating excitatory by gradient, update inhibitory deterministically from excitatory
             with torch.no_grad():
+                time_duration_ms = firing_rates.shape[2]
+                inh_delay = 4 # ms
                 for batch_idx in range(firing_rates.shape[0]):
                     exc_firing_rate_tensor = firing_rates[batch_idx, :self.num_segments_exc, :] # (639, T)
-                    inh_firing_rate_tensor_new = torch.zeros(self.num_segments_inh, firing_rates.shape[2], device=firing_rates.device, dtype=firing_rates.dtype)
-        
-                    inh_firing_rate_tensor_new[1:] = (float(freq_inh_hz)/1000.0)*(exc_firing_rate_tensor/torch.mean(exc_firing_rate_tensor))
-                    inh_firing_rate_tensor_new[0] = (float(freq_inh_hz)/1000.0)*(exc_firing_rate_tensor[0, :]/torch.mean(exc_firing_rate_tensor))
+                    inh_firing_rate_tensor_new = torch.zeros(self.num_segments_inh, time_duration_ms, device=firing_rates.device, dtype=firing_rates.dtype)
+
+                    
+                    inh_firing_rate_tensor_new[1:,inh_delay:] = (float(freq_inh_hz)/1000.0)*(exc_firing_rate_tensor[:,:time_duration_ms-inh_delay]/torch.mean(exc_firing_rate_tensor[:,:time_duration_ms-inh_delay]))
+                    inh_firing_rate_tensor_new[0,inh_delay:] = (float(freq_inh_hz)/1000.0)*(exc_firing_rate_tensor[0,:time_duration_ms-inh_delay]/torch.mean(exc_firing_rate_tensor[:,:time_duration_ms-inh_delay]))
                     firing_rates[batch_idx, self.num_segments_exc:, :] = inh_firing_rate_tensor_new
 
-            loss_history.append(float(loss.detach().cpu().numpy()))
-            spike_preds_history.append([batch1_max, batch2_max])
+            # 只在累积步骤结束时记录历史
+            if (epoch + 1) % accumulation_steps == 0:
+                loss_history.append(float(loss.detach().cpu().numpy() * accumulation_steps))  # 恢复原始损失值
+                spike_preds_history.append([batch1_max, batch2_max])
 
             # 定期清理GPU缓存和垃圾回收
-            if epoch % 50 == 0:
+            if epoch % 5 == 0:  # 更频繁的清理
                 firing_rates_history.append(firing_rates.clone().detach().cpu().numpy())
                 torch.cuda.empty_cache()
                 gc.collect()
 
-            # Record spike predictions every 300 steps
-            if epoch % 300 == 0:
+            # Record spike predictions every 100 steps
+            if epoch % 100 == 0:
                 print(f"Iter {epoch:4d}: Pred_loss: {loss.item():.4f}, Spike_preds_max: [{batch1_max:.3f}, {batch2_max:.3f}], Diff = {batch2_max-batch1_max:.3f}")
                 
             # 删除不再需要的中间变量以释放内存
@@ -509,20 +525,23 @@ def main():
     # models_dir = '/G/results/aim2_sjc/Models_TCN/Single_Neuron_InOut_SJC_funcgroup2_var2_AMPA/models/AMPA_torch/depth_1_filters_128_window_400/'
     
     data_type = 'NMDA' if 'NMDA' in models_dir else 'AMPA'
-    batch_size = 5
+    batch_size = 200
 
     # Select fixed excitatory indices
     range0_idx = [1, 2, 4, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 26, 
                   27, 30, 31, 34, 35, 36, 37, 40, 43, 44, 45, 46, 47, 48, 49, 52, 53, 54, 55, 
                   56, 57, 58, 61, 64, 65, 66, 69, 72, 73, 74, 75, 76, 79, 80, 81, 82, 83, 84]
 
-    for save_dir_idx in range(1, 2):
+    for save_dir_idx in range(2, 6):
         # random choose 3 indices
         np.random.seed(save_dir_idx)
         monoconn_seg_indices = np.random.choice(range0_idx, size=3, replace=False) # torch.randperm(self.num_segments_exc)[:3].numpy()
         print(f"Fixed excitatory segments for adding spikes: {monoconn_seg_indices}")
+        
+        # Store heatmap data for all seeds
+        all_seeds_heatmap_data = []
             
-        for random_seed in [42]:
+        for random_seed in [42, 43, 44, 45, 46, 47]:
             save_dir = f'./results/6_activity_optimization_results/{data_type}_seed_{random_seed}_inhfixed_{save_dir_idx}'
 
             init_firing_rates = run_simulation_batch(num_runs=batch_size, epoch=random_seed, rebuild_cell=False)
@@ -556,7 +575,7 @@ def main():
             print("\n===== Optimization Completed =====")
             
             try:
-                create_optimization_report(
+                heatmap_data = create_optimization_report(
                     loss_history=loss_history,
                     firing_rates_history=firing_rates_history,
                     spike_preds_history=spike_preds_history,
@@ -566,9 +585,52 @@ def main():
                     time_duration_ms=400, input_window_size=400,
                     save_dir=save_dir, report_name="activity_optimization"
                 )
+                # Store heatmap data for this seed
+                if heatmap_data is not None:
+                    all_seeds_heatmap_data.append(heatmap_data)
                 print("Complete optimization report generated")
             except ImportError:
                 print("Visualization module not available, skipping visualization step")
+        
+        # After all seeds are processed, calculate average heatmap
+        if len(all_seeds_heatmap_data) > 0:
+            print(f"\n===== Calculating Average Heatmap for save_dir_idx {save_dir_idx} =====")
+            
+            # Calculate average for each heatmap component
+            avg_initial_exc = np.mean([data['initial_exc_data'] for data in all_seeds_heatmap_data], axis=0)
+            avg_optimized_exc = np.mean([data['optimized_exc_data'] for data in all_seeds_heatmap_data], axis=0)
+            avg_initial_inh = np.mean([data['initial_inh_data'] for data in all_seeds_heatmap_data], axis=0)
+            avg_optimized_inh = np.mean([data['optimized_inh_data'] for data in all_seeds_heatmap_data], axis=0)
+            
+            # Use indices from the first seed (should be the same for all seeds)
+            first_seed_data = all_seeds_heatmap_data[0]
+            
+            average_heatmap_data = {
+                'initial_exc_data': avg_initial_exc,
+                'optimized_exc_data': avg_optimized_exc,
+                'initial_inh_data': avg_initial_inh,
+                'optimized_inh_data': avg_optimized_inh,
+                'exc_indices': first_seed_data['exc_indices'],
+                'opt_exc_indices': first_seed_data['opt_exc_indices'],
+                'inh_indices': first_seed_data['inh_indices'],
+                'opt_inh_indices': first_seed_data['opt_inh_indices']
+            }
+            
+            # Create average heatmap visualization
+            average_save_dir = f'./results/6_activity_optimization_results/{data_type}_average_inhfixed_{save_dir_idx}'
+            os.makedirs(average_save_dir, exist_ok=True)
+            
+            average_heatmap_save_path = os.path.join(average_save_dir, 'average_combined_firing_rate_heatmap.png')
+            plot_average_heatmap(
+                average_heatmap_data, 
+                monoconn_seg_indices,
+                num_exc_segments=639, 
+                num_inh_segments=640,
+                save_path=average_heatmap_save_path,
+                title_prefix=f"Average Heatmap (Seeds 42-46)"
+            )
+            
+            print(f"Average heatmap saved to: {average_heatmap_save_path}")
 
 if __name__ == "__main__":
     main() 
