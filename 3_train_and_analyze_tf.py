@@ -11,9 +11,11 @@ from utils.model_analysis import (
     load_model_results, print_model_summary, 
     plot_training_curves, plot_model_comparison, analyze_training_stability, plot_auc_analysis
 )
+from utils.model_size_utils import get_model_size_info, analyze_model_size
 import tensorflow as tf
 from keras.optimizers import Nadam
-from keras.callbacks import LearningRateScheduler
+from keras.callbacks import LearningRateScheduler, Callback
+from tqdm import tqdm
 
 # 添加GPU监控库
 try:
@@ -243,10 +245,21 @@ class GPUMonitor:
         
         print("========================")
 
+# 全局变量用于存储动态学习率（将在模型分析后设置）
+_dynamic_init_lr = 0.0001
+_dynamic_max_lr = 0.001
+
+def set_warmup_lr(init_lr, max_lr):
+    """设置warmup函数的学习率参数"""
+    global _dynamic_init_lr, _dynamic_max_lr
+    _dynamic_init_lr = init_lr
+    _dynamic_max_lr = max_lr
+
 def lr_warmup_decay(epoch, lr):
+    """学习率warmup和decay调度（使用动态设置的学习率）"""
     warmup_epochs = 10
-    init_lr = 0.0001
-    max_lr = 0.001
+    init_lr = _dynamic_init_lr
+    max_lr = _dynamic_max_lr
     decay_rate = 0.95
     if epoch < warmup_epochs:
         # 线性warmup
@@ -254,6 +267,63 @@ def lr_warmup_decay(epoch, lr):
     else:
         # 衰减
         return max_lr * (decay_rate ** (epoch - warmup_epochs))
+
+class TqdmProgressBar(Callback):
+    """自定义tqdm进度条Callback，显示类似PyTorch版本的进度条"""
+    
+    def __init__(self, learning_schedule, num_epochs, num_steps_multiplier, train_steps_per_epoch, valid_steps=None):
+        super().__init__()
+        self.learning_schedule = learning_schedule
+        self.num_epochs = num_epochs
+        self.num_steps_multiplier = num_steps_multiplier
+        self.train_steps_per_epoch = train_steps_per_epoch
+        self.valid_steps = valid_steps
+        self.train_pbar = None
+        self.valid_pbar = None
+        self.current_epoch = 0
+        
+    def on_epoch_begin(self, epoch, logs=None):
+        """在每个epoch开始时创建新的训练进度条"""
+        self.current_epoch = epoch
+        # 计算当前是第几个mini_epoch（从1开始）
+        mini_epoch_num = epoch + 1
+        desc = f"Train {self.learning_schedule+1}/{self.num_epochs} epoch {mini_epoch_num}/{self.num_steps_multiplier}"
+        self.train_pbar = tqdm(total=self.train_steps_per_epoch, desc=desc, leave=False, ncols=100)
+        
+    def on_batch_end(self, batch, logs=None):
+        """在每个batch结束时更新训练进度条"""
+        if self.train_pbar is not None:
+            # 更新进度条，显示当前loss信息
+            loss_info = ""
+            if logs:
+                if 'loss' in logs:
+                    loss_info = f"loss={logs['loss']:.4f}"
+                elif 'spikes_loss' in logs:
+                    loss_info = f"spike_loss={logs['spikes_loss']:.4f}"
+            self.train_pbar.set_postfix_str(loss_info)
+            self.train_pbar.update(1)
+    
+    def on_test_begin(self, logs=None):
+        """在验证开始时创建验证进度条"""
+        if self.valid_steps is not None:
+            self.valid_pbar = tqdm(total=self.valid_steps, desc="Valid", leave=False, ncols=100)
+    
+    def on_test_batch_end(self, batch, logs=None):
+        """在验证batch结束时更新验证进度条"""
+        if self.valid_pbar is not None:
+            self.valid_pbar.update(1)
+    
+    def on_test_end(self, logs=None):
+        """在验证结束时关闭验证进度条"""
+        if self.valid_pbar is not None:
+            self.valid_pbar.close()
+            self.valid_pbar = None
+            
+    def on_epoch_end(self, epoch, logs=None):
+        """在每个epoch结束时关闭训练进度条"""
+        if self.train_pbar is not None:
+            self.train_pbar.close()
+            self.train_pbar = None
 
 def train_and_save(network_depth, num_filters_per_layer, input_window_size, num_epochs, 
                    train_data_dir, valid_data_dir, test_data_dir, models_dir,
@@ -293,41 +363,11 @@ def train_and_save(network_depth, num_filters_per_layer, input_window_size, num_
     train_files_per_epoch = 6 # 4  # 减少训练文件数量
     valid_files_per_epoch = 2 #max(1, int(validation_fraction * train_files_per_epoch))
 
-    batch_size_per_epoch        = [8] * num_epochs   # 16 # 减少批次大小从32到16
-    learning_rate_per_epoch     = [0.0001] * len(batch_size_per_epoch)
-    loss_weights_per_epoch      = [[1.0, 0.02]] * num_epochs # [[1.0, 0.0200]] * num_epochs # Even higher spike weight
-    num_train_steps_per_epoch   = [100] * num_epochs  # 减少训练步数
-
-    for i in range(40,num_epochs):
-        batch_size_per_epoch[i]    = 8
-        learning_rate_per_epoch[i] = 0.00003
-        loss_weights_per_epoch[i]  = [2.0, 0.005] # [2.0, 0.0100]
-        
-    for i in range(80,num_epochs):
-        batch_size_per_epoch[i]    = 8
-        learning_rate_per_epoch[i] = 0.00001
-        loss_weights_per_epoch[i]  = [4.0, 0.002] # [4.0, 0.0100]
-
-    for i in range(120,num_epochs):
-        batch_size_per_epoch[i]    = 8
-        learning_rate_per_epoch[i] = 0.000003
-        loss_weights_per_epoch[i]  = [8.0, 0.001] # [8.0, 0.0100]
-
-    for i in range(160,num_epochs):
-        batch_size_per_epoch[i]    = 8
-        learning_rate_per_epoch[i] = 0.000001
-        loss_weights_per_epoch[i]  = [16.0, 0.001] # [9.0, 0.0030]
-
-    learning_schedule_dict = {}
-    learning_schedule_dict['train_file_load']           = train_file_load
-    learning_schedule_dict['valid_file_load']           = valid_file_load
-    learning_schedule_dict['validation_fraction']       = validation_fraction
-    learning_schedule_dict['num_epochs']                = num_epochs
-    learning_schedule_dict['num_steps_multiplier']      = num_steps_multiplier
-    learning_schedule_dict['batch_size_per_epoch']      = batch_size_per_epoch
-    learning_schedule_dict['loss_weights_per_epoch']    = loss_weights_per_epoch
-    learning_schedule_dict['learning_rate_per_epoch']   = learning_rate_per_epoch
-    learning_schedule_dict['num_train_steps_per_epoch'] = num_train_steps_per_epoch
+    # batch_size和学习率将在模型创建后根据模型规模动态设置
+    # 先设置默认值（将在模型分析后更新）
+    batch_size = 8  # 默认值，将在模型分析后调整
+    loss_weights_per_epoch = [[1.0, 0.02]] * num_epochs # [[1.0, 0.0200]] * num_epochs # Even higher spike weight
+    num_train_steps_per_epoch = [100] * num_epochs  # 减少训练步数
 
     # ------------------------------------------------------------------
     # define network architecture params
@@ -391,6 +431,66 @@ def train_and_save(network_depth, num_filters_per_layer, input_window_size, num_
                                                             strides_per_layer, dilation_rates_per_layer, initializer_per_layer,
                                                             use_improved_initialization=use_improved_initialization)
 
+    # ========== 分析模型规模并动态调整batch_size和学习率 ==========
+    # 快速查看模型规模（简洁版）
+    total_params, size_category, batch_range = get_model_size_info(temporal_conv_net)
+    print(f"\n快速模型信息: {size_category}, 参数量: {total_params:,}, 推荐batch_size: {batch_range}\n")
+    
+    # 详细分析模型规模（详细版）
+    model_info = analyze_model_size(temporal_conv_net, verbose=False)  # 不打印详细信息，避免重复输出
+    
+    # 根据模型规模动态设置batch_size和学习率
+    if "小模型" in size_category or "Small" in model_info['size_category']:
+        batch_size = 256
+        base_lr = 0.0006  # 小模型使用较小的学习率
+        print(f"\n检测到小模型，设置 batch_size = {batch_size}, base_lr = {base_lr}")
+    # elif "大模型" in size_category or "Large" in model_info['size_category']:
+    #     batch_size = 256
+    #     base_lr = 0.0006  # 大模型使用较大的学习率（从64到256，学习率×2）
+    #     print(f"\n检测到大模型，设置 batch_size = {batch_size}, base_lr = {base_lr}")
+    else:
+        # 中等模型，使用中间值
+        batch_size = 8
+        base_lr = 0.0001  # 中等模型使用中等学习率
+        print(f"\n检测到中等模型，设置 batch_size = {batch_size}, base_lr = {base_lr}")
+    
+    # 根据batch_size设置学习率计划
+    batch_size_per_epoch = [batch_size] * num_epochs
+    learning_rate_per_epoch = [base_lr] * num_epochs  # 初始学习率 (0-40 epochs)
+    
+    # 训练阶段配置：(起始epoch, 学习率倍数, 损失权重)
+    # 学习率将根据base_lr动态计算
+    training_stages = [
+        (40, 0.3, [2.0, 0.01]),   # 学习率 = base_lr * 0.3 # [2.0, 0.005]
+        (80, 0.1, [4.0, 0.01]),   # 学习率 = base_lr * 0.1 # [4.0, 0.002]   
+        (120, 0.03, [8.0, 0.01]), # 学习率 = base_lr * 0.03 # [8.0, 0.001]
+        (160, 0.01, [9.0, 0.003]), # 学习率 = base_lr * 0.01 # [16.0, 0.001]
+    ]
+    
+    for start_epoch, lr_ratio, loss_weights in training_stages:
+        for i in range(start_epoch, num_epochs):
+            learning_rate_per_epoch[i] = base_lr * lr_ratio
+            loss_weights_per_epoch[i] = loss_weights
+    
+    print(f"动态调整完成: batch_size = {batch_size}, 初始学习率 = {base_lr}")
+    print("=" * 60)
+    
+    # 设置warmup函数的学习率（根据模型规模调整）
+    max_lr = base_lr * 10  # max_lr通常是init_lr的10倍
+    set_warmup_lr(base_lr, max_lr)
+    
+    # 保存学习计划到字典
+    learning_schedule_dict = {}
+    learning_schedule_dict['train_file_load']           = train_file_load
+    learning_schedule_dict['valid_file_load']           = valid_file_load
+    learning_schedule_dict['validation_fraction']       = validation_fraction
+    learning_schedule_dict['num_epochs']                = num_epochs
+    learning_schedule_dict['num_steps_multiplier']      = num_steps_multiplier
+    learning_schedule_dict['batch_size_per_epoch']      = batch_size_per_epoch
+    learning_schedule_dict['loss_weights_per_epoch']    = loss_weights_per_epoch
+    learning_schedule_dict['learning_rate_per_epoch']   = learning_rate_per_epoch
+    learning_schedule_dict['num_train_steps_per_epoch'] = num_train_steps_per_epoch
+
     is_fully_connected = (network_depth == 1) or sum(filter_sizes_per_layer[1:]) == (network_depth -1)
     if is_fully_connected:
         model_prefix = '%s_FCN' %(synapse_type)
@@ -434,6 +534,7 @@ def train_and_save(network_depth, num_filters_per_layer, input_window_size, num_
                 use_improved_sampling=use_improved_sampling, spike_rich_ratio=spike_rich_ratio)
     
         train_steps_per_epoch = len(train_data_generator)
+        valid_steps_per_epoch = len(valid_data_generator)
         
         # 优化器只初始化一次，学习率由callback动态调整
         if learning_schedule == 0:
@@ -458,20 +559,18 @@ def train_and_save(network_depth, num_filters_per_layer, input_window_size, num_
         print("训练前GPU状态:")
         gpu_monitor.print_status("  ")
         
-        # 可选：在后台启动GPU监控（注释掉以避免干扰训练输出）
-        # import threading
-        # monitor_thread = threading.Thread(target=gpu_monitor.monitor_continuously, args=(300, 10))
-        # monitor_thread.daemon = True
-        # monitor_thread.start()
+    
 
-        lr_scheduler = LearningRateScheduler(lr_warmup_decay, verbose=1)
+        lr_scheduler = LearningRateScheduler(lr_warmup_decay, verbose=0)  # 不打印学习率变化，避免重复输出
+        # 创建自定义tqdm进度条Callback
+        tqdm_callback = TqdmProgressBar(learning_schedule, num_epochs, num_steps_multiplier, train_steps_per_epoch, valid_steps_per_epoch)
         history = temporal_conv_net.fit_generator(generator=train_data_generator,
                                                 epochs=num_steps_multiplier,
                                                 validation_data=valid_data_generator,
-                                                use_multiprocessing=use_multiprocessing,  # 关闭多进程以确保进度条正常显示
-                                                workers=num_workers,  # 减少worker数量
-                                                verbose=1,  # 显示详细进度条
-                                                callbacks=[lr_scheduler])
+                                                use_multiprocessing=use_multiprocessing,
+                                                workers=num_workers,
+                                                verbose=0,  # 设置为0禁用默认进度条，使用自定义tqdm进度条
+                                                callbacks=[lr_scheduler, tqdm_callback])
 
         training_time = time.time() - start_time
         print(f"Training time: {training_time:.2f}s")
@@ -630,7 +729,7 @@ def main():
 
     # 配置改进选项
     use_improved_initialization = False   # 设置为True启用改进的初始化策略
-    use_improved_sampling = True        # 设置为True启用改进的数据采样策略
+    use_improved_sampling = False        # 设置为True启用改进的数据采样策略
     spike_rich_ratio = 0.6              # 60%的样本包含spike
     
     print(f"\n=== 改进配置 ===")
@@ -668,6 +767,7 @@ def main():
 
         # 基础配置
         test_suffix = '' #'_SJC_funcgroup2_var2'
+        
         base_path = '/G/results/aim2_sjc/Models_TCN/IF_model_InOut' + test_suffix
         data_suffix = 'IF_model' #'L5PC_NMDA'
         model_suffix = 'IF_model_tensorflow' #'NMDA_tensorflow'

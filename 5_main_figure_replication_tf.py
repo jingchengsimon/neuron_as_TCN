@@ -199,7 +199,7 @@ def plot_voltage_traces(y_spikes_GT, y_spikes_hat, y_voltage_GT, y_voltage_hat,
                        global_threshold, selected_traces, output_dir):
     """Plot voltage traces"""
     num_subplots = len(selected_traces)
-    fig, axes = plt.subplots(nrows=num_subplots, ncols=1, figsize=(5, 3*num_subplots), sharex=True)
+    fig, axes = plt.subplots(nrows=num_subplots, ncols=1, figsize=(7, 2*num_subplots), sharex=True)
     fig.subplots_adjust(left=0.05, right=0.95, bottom=0.05, top=0.95, wspace=0.01, hspace=0.3)
     
     for k, selected_trace in enumerate(selected_traces):
@@ -339,7 +339,7 @@ def build_dataset_identifier(model_dir, model_size, desired_fpr):
     if '_' in strategy_part:
         strategy_part = strategy_part.split('_', 1)[1]
     base_identifier = f"{inout_suffix}_{strategy_part}"
-    return f'{model_size}_fpr{desired_fpr}_{base_identifier}'
+    return f'{model_size}_{base_identifier}/fpr{desired_fpr}'
 
 def setup_paths_and_files(models_dir, data_dir, model_string='NMDA', model_size='large', desired_fpr=0.002):
     """Setup paths and files"""
@@ -584,12 +584,12 @@ def main(models_dir, data_dir, model_string='NMDA', model_size='large', desired_
 
         
 if __name__ == "__main__":
-    # models_dir = '/G/results/aim2_sjc/Models_TCN/Single_Neuron_InOut_SJC_funcgroup2_var2/models/NMDA_tensorflow/'
-    # data_dir = '/G/results/aim2_sjc/Models_TCN/Single_Neuron_InOut_SJC_funcgroup2_var2/data/'
+    models_dir = '/G/results/aim2_sjc/Models_TCN/Single_Neuron_InOut_SJC_funcgroup2_var2/models/NMDA_tensorflow/'
+    data_dir = '/G/results/aim2_sjc/Models_TCN/Single_Neuron_InOut_SJC_funcgroup2_var2/data/'
 
-    models_dir = '/G/results/aim2_sjc/Models_TCN/IF_model_InOut/models/IF_model_tensorflow/'
-    data_dir = '/G/results/aim2_sjc/Models_TCN/IF_model_InOut/data/'
-    desired_fpr = 0.02
+    # models_dir = '/G/results/aim2_sjc/Models_TCN/IF_model_InOut/models/IF_model_tensorflow/'
+    # data_dir = '/G/results/aim2_sjc/Models_TCN/IF_model_InOut/data/'
+    desired_fpr = 0.002
     
     main(models_dir, data_dir, 'NMDA', 'large', desired_fpr)
 

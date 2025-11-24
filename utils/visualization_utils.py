@@ -233,10 +233,23 @@ def plot_summary_panels(fpr, tpr, desired_fp_ind, y_spikes_GT, y_spikes_hat,
     ax_xcorr.plot(lags, xcorr_hz, 'k-', linewidth=1.5)
     ax_xcorr.axvline(0, color='k', linestyle=':', alpha=0.5)
     _setup_plot_style(ax_xcorr, '', 'Δt (ms)', 'spike rate (Hz)', grid=False)
+    
+    # Calculate cross correlation coefficient (Pearson correlation) at lag=0
+    spikes_gt_flat = spikes_gt_bin.ravel()
+    spikes_pred_flat = spikes_pred_bin.ravel()
+    if len(spikes_gt_flat) > 0 and np.std(spikes_gt_flat) > 0 and np.std(spikes_pred_flat) > 0:
+        cross_corr_coeff = np.corrcoef(spikes_gt_flat, spikes_pred_flat)[0, 1]
+    else:
+        cross_corr_coeff = 0.0
+    print(f"Cross correlation coefficient (Pearson r): {cross_corr_coeff:.4f}")
 
     # Voltage scatter plot
     ax_scatter = axes[2]
     x, y = y_soma_GT.ravel(), y_soma_hat.ravel()
+    
+    # Calculate RMSE before downsampling
+    rmse = np.sqrt(np.mean((x - y)**2))
+    print(f"RMSE (voltage scatter): {rmse:.4f} mV")
     
     # Downsample for performance
     if len(x) > 50000:

@@ -50,11 +50,12 @@ class DeviceSelector:
             # Test if model can actually run on this device
             if device.type == 'cuda':
                 # Get the expected number of input channels from model
-                if hasattr(model, 'tcn') and hasattr(model.tcn, 'in_channels'):
-                    num_channels = model.tcn.in_channels
+                if hasattr(model, 'tcn') and hasattr(model.tcn[0], 'conv'):
+                    conv = model.tcn[0].conv 
+                    num_channels = conv.in_channels
                 else:
-                    # Default fallback - based on checkpoint error: expects 1279 channels
-                    num_channels = 1279  # 639 + 640
+                    num_channels = 1279
+
                 test_input = torch.randn(1, 400, num_channels).to(device)  # (batch, time, channels)
                 with torch.no_grad():
                     _ = model(test_input)
@@ -94,13 +95,19 @@ class MainFigureReplication:
         """Setup paths and files"""
         # Set data directory
         test_data_dir = data_dir + f'L5PC_{model_string}_test/'
+        valid_data_dir = data_dir + f'L5PC_{model_string}_valid/'
+
         # Set model directory
-        if model_string == 'NMDA':
+        if 'IF_model' in models_dir:
+            model_dir = models_dir + 'depth_1_filters_1_window_80/'
+            test_data_dir = data_dir + f'IF_model_test/'
+            valid_data_dir = data_dir + f'IF_model_valid/'
+        elif model_string == 'NMDA':
             model_dir = models_dir + ('depth_3_filters_256_window_400/' if model_size == 'small' 
-                                     else 'depth_7_filters_256_window_400/')
+                                    else 'depth_7_filters_256_window_400/')
         elif model_string == 'AMPA':
             model_dir = models_dir + ('depth_1_filters_128_window_400/' if model_size == 'small' 
-                                     else 'depth_7_filters_256_window_400/')
+                                    else 'depth_7_filters_256_window_400/')
         # Build output directory
         dataset_identifier = self._build_dataset_identifier(model_dir, model_size, desired_fpr)
         output_dir = f"./results/5_main_figure_replication/{dataset_identifier}"
@@ -109,12 +116,17 @@ class MainFigureReplication:
         test_files = sorted(glob.glob(test_data_dir + '*_128x6_*')) #[:10]
         if not test_files:
             test_files = sorted(glob.glob(os.path.join(test_data_dir, '*.p')))
+        # Find validation files
+        valid_files = sorted(glob.glob(valid_data_dir + '*_128x6_*'))
+        if not valid_files:
+            valid_files = sorted(glob.glob(os.path.join(valid_data_dir, '*.p')))
         # Find best model
         model_filename, model_metadata_filename = find_best_model(model_dir)
         print(f'Model file: {model_filename.split("/")[-1]}')
         print(f'Metadata file: {model_metadata_filename.split("/")[-1]}')
         print(f'Test files count: {len(test_files)}')
-        return test_files, model_filename, model_metadata_filename, output_dir
+        print(f'Validation files count: {len(valid_files)}')
+        return test_files, valid_files, model_filename, model_metadata_filename, output_dir
 
     def load_test_data(self, test_files):
         """Load test data"""
@@ -127,6 +139,18 @@ class MainFigureReplication:
         duration = (time.time() - start_time) / 60
         print(f'Data loading completed, took {duration:.3f} minutes')
         return X_test, y_spike_test, y_soma_test, y_soma_test_transposed
+    
+    def load_validation_data(self, valid_files):
+        """Load validation data"""
+        print('Loading validation data...')
+        start_time = time.time()
+        v_threshold = -55
+        X_valid, y_spike_valid, y_soma_valid = parse_multiple_sim_experiment_files(valid_files)
+        y_soma_valid_transposed = y_soma_valid.copy().T
+        y_soma_valid[y_soma_valid > v_threshold] = v_threshold
+        duration = (time.time() - start_time) / 60
+        print(f'Validation data loading completed, took {duration:.3f} minutes')
+        return X_valid, y_spike_valid, y_soma_valid, y_soma_valid_transposed
 
     def load_model_and_metadata(self, model_filename, model_metadata_filename, base_path=""):
         """Load model and metadata"""
@@ -261,8 +285,8 @@ class MainFigureReplication:
         return y_spikes_GT, y_spikes_hat, y_soma_GT, y_soma_hat
 
     def evaluate_and_visualize(self, y_spikes_GT, y_spikes_hat, y_soma_GT, y_soma_hat, 
-                          y_soma_test_transposed, desired_fpr, model_string, output_dir):
-        """Evaluate and visualize results"""
+                          y_soma_test_transposed, threshold, desired_fpr, model_string, output_dir):
+        """Evaluate and visualize results on test set using threshold determined from validation set"""
         # Filter data
         
         ignore_time_at_start_ms = 500
@@ -286,12 +310,18 @@ class MainFigureReplication:
         y_soma_hat_eval = y_soma_hat[simulations_to_eval, :][:, time_points_to_eval]
         y_soma_original_eval = y_soma_test_transposed[simulations_to_eval, :][:, time_points_to_eval]
         
-        # Calculate ROC metrics
+        # Calculate ROC metrics on test set (for visualization, but threshold is from validation)
         roc_metrics = self._calculate_roc_metrics(y_spikes_GT_eval, y_spikes_hat_eval, desired_fpr)
+        # Override threshold with the one determined from validation set
+        roc_metrics["threshold"] = threshold
         
+        # Calculate actual FPR on test set using threshold from validation
+        test_fpr_at_threshold = self._calculate_fpr_at_threshold(y_spikes_GT_eval, y_spikes_hat_eval, threshold)
+        roc_metrics["actual_fpr"] = test_fpr_at_threshold
+        
+        print(f'Threshold (from validation set): {threshold:.10f}')
+        print(f'Test set FPR at this threshold: {test_fpr_at_threshold:.4f}')
         print(f'Desired FPR: {desired_fpr:.4f}')
-        print(f'Actual FPR: {roc_metrics["actual_fpr"]:.4f}')
-        print(f'Threshold: {roc_metrics["threshold"]:.10f}')
         
         # Analyze FPR distribution
         _, _, perfect_tpr_samples = self._analyze_fpr_distribution(
@@ -352,7 +382,7 @@ class MainFigureReplication:
         if '_' in strategy_part:
             strategy_part = strategy_part.split('_', 1)[1]
         base_identifier = f"{inout_suffix}_{strategy_part}"
-        return f'{model_size}_fpr{desired_fpr}_{base_identifier}'
+        return f'{model_size}_{base_identifier}/fpr{desired_fpr}'
     
     def _reconstruct_model_from_architecture(self, architecture_dict, device, base_path=""):
         """Reconstruct PyTorch model from architecture dictionary using TCNModel from fit_CNN_torch"""
@@ -364,13 +394,20 @@ class MainFigureReplication:
         l2_regularization_per_layer = architecture_dict.get('l2_regularization_per_layer', [1e-06] * 7)
         initializer_per_layer = architecture_dict.get('initializer_per_layer', [0.002] * 7)
         input_window_size = architecture_dict.get('input_window_size', 400)
-        if 'SJC' in base_path:
-            num_segments_inh = 640
+
+        if 'IF_model' in base_path:
+            num_segments_exc = 80
+            num_segments_inh = 20
         else:
-            num_segments_inh = 639
+            num_segments_exc = 639
+            if 'SJC' in base_path:
+                num_segments_inh = 640
+            else:
+                num_segments_inh = 639
+
         model = TCNModel(
             max_input_window_size=input_window_size,
-            num_segments_exc=639,
+            num_segments_exc=num_segments_exc,
             num_segments_inh=num_segments_inh,
             filter_sizes_per_layer=filter_sizes_per_layer,
             num_filters_per_layer=num_filters_per_layer,
@@ -396,6 +433,16 @@ class MainFigureReplication:
             'threshold': thresholds[desired_fp_ind],
             'auc': auc(fpr, tpr)
         }
+    
+    def _calculate_fpr_at_threshold(self, y_test, y_test_hat, threshold):
+        """Calculate FPR at a specific threshold"""
+        y_pred_binary = (y_test_hat > threshold).astype(int)
+        y_test_flat = y_test.ravel()
+        y_pred_flat = y_pred_binary.ravel()
+        fp = np.sum((y_test_flat == 0) & (y_pred_flat == 1))
+        tn = np.sum((y_test_flat == 0) & (y_pred_flat == 0))
+        fpr = fp / (fp + tn) if (fp + tn) > 0 else 0.0
+        return fpr
 
     def _calculate_sample_specific_fpr(self, y_spikes_GT_sample, y_spikes_hat_sample, threshold):
         """Calculate FPR and TPR for a single sample"""
@@ -473,23 +520,53 @@ def main(models_dir, data_dir, model_string='NMDA', model_size='large', desired_
     try:
         mfr = MainFigureReplication()
         # Setup paths and files
-        test_files, model_filename, model_metadata_filename, output_dir = mfr.setup_paths_and_files(
+        test_files, valid_files, model_filename, model_metadata_filename, output_dir = mfr.setup_paths_and_files(
             models_dir, data_dir, model_string, model_size, desired_fpr
         )
-        # Load data
-        X_test, y_spike_test, y_soma_test, y_soma_test_transposed = mfr.load_test_data(test_files)
         # Load model
         temporal_conv_net, overlap_size, input_window_size = mfr.load_model_and_metadata(
             model_filename, model_metadata_filename, models_dir
         )
-        # Predict
+        
+        # Step 1: Load validation data and determine threshold
+        print('\n' + '='*60)
+        print('Step 1: Determining threshold from validation set')
+        print('='*60)
+        X_valid, y_spike_valid, y_soma_valid, y_soma_valid_transposed = mfr.load_validation_data(valid_files)
+        y_spikes_valid_GT, y_spikes_valid_hat, y_soma_valid_GT, y_soma_valid_hat = mfr.predict_with_model(
+            temporal_conv_net, X_valid, y_spike_valid, y_soma_valid, input_window_size, overlap_size
+        )
+        
+        # Filter validation data for threshold calculation
+        ignore_time_at_start_ms = 500
+        time_points_to_eval_valid = np.arange(y_spikes_valid_GT.shape[1]) >= ignore_time_at_start_ms
+        spike_counts_valid = y_spikes_valid_GT.sum(axis=1)
+        max_spike_counts_valid = max(spike_counts_valid)
+        simulations_to_eval_valid = np.logical_and(
+            spike_counts_valid >= 0,
+            spike_counts_valid <= max_spike_counts_valid
+        )
+        y_spikes_valid_GT_eval = y_spikes_valid_GT[simulations_to_eval_valid, :][:, time_points_to_eval_valid]
+        y_spikes_valid_hat_eval = y_spikes_valid_hat[simulations_to_eval_valid, :][:, time_points_to_eval_valid]
+        
+        # Calculate threshold on validation set
+        valid_roc_metrics = mfr._calculate_roc_metrics(y_spikes_valid_GT_eval, y_spikes_valid_hat_eval, desired_fpr)
+        threshold_from_validation = valid_roc_metrics["threshold"]
+        print(f'\nThreshold determined from validation set: {threshold_from_validation:.10f}')
+        print(f'Validation set FPR at this threshold: {valid_roc_metrics["actual_fpr"]:.4f}')
+        
+        # Step 2: Load test data and evaluate with threshold from validation
+        print('\n' + '='*60)
+        print('Step 2: Evaluating on test set using threshold from validation')
+        print('='*60)
+        X_test, y_spike_test, y_soma_test, y_soma_test_transposed = mfr.load_test_data(test_files)
         y_spikes_GT, y_spikes_hat, y_soma_GT, y_soma_hat = mfr.predict_with_model(
             temporal_conv_net, X_test, y_spike_test, y_soma_test, input_window_size, overlap_size
         )
-        # Evaluate and visualize
+        # Evaluate and visualize on test set
         mfr.evaluate_and_visualize(
             y_spikes_GT, y_spikes_hat, y_soma_GT, y_soma_hat,
-            y_soma_test_transposed, desired_fpr, model_string, output_dir
+            y_soma_test_transposed, threshold_from_validation, desired_fpr, model_string, output_dir
         )
     except Exception as e:
         print(f"Error in main function: {e}")
@@ -503,9 +580,15 @@ def main(models_dir, data_dir, model_string='NMDA', model_size='large', desired_
         
 if __name__ == "__main__":
     data_suffix = 'NMDA'
-    base_path = '/G/results/aim2_sjc/Models_TCN/Single_Neuron_InOut_SJC_funcgroup2_var2/'
-    models_dir = base_path + f'models/{data_suffix}_torch_2/'
-    data_dir = base_path + 'data/'
+
+    # base_path = '/G/results/aim2_sjc/Models_TCN/Single_Neuron_InOut_SJC_funcgroup2_var2/'
+    # models_dir = base_path + f'models/{data_suffix}_torch/'
+    # data_dir = base_path + 'data/'
+
+    models_dir = '/G/results/aim2_sjc/Models_TCN/IF_model_InOut/models/IF_model_torch/'
+    data_dir = '/G/results/aim2_sjc/Models_TCN/IF_model_InOut/data/'
+    
     desired_fpr = 0.002
+    
     
     main(models_dir, data_dir, data_suffix, 'large', desired_fpr)

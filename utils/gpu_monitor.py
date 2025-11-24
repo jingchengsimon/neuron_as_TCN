@@ -281,3 +281,64 @@ def get_gpu_memory_info():
             'max_allocated': max_allocated
         }
     return None
+
+def checkgpu(gpu_index=0, interval=1):
+    """
+    实时查看GPU占用率，类似checkcpu的形式
+    
+    Args:
+        gpu_index: GPU设备索引，默认为0
+        interval: 采样间隔（秒），用于计算平均利用率，默认为1秒
+    
+    Example:
+        checkgpu()  # 查看GPU 0的状态
+        checkgpu(gpu_index=1)  # 查看GPU 1的状态
+    """
+    if not GPU_MONITORING_AVAILABLE:
+        print("GPU监控不可用，请安装: pip install nvidia-ml-py")
+        return
+    
+    try:
+        handle = pynvml.nvmlDeviceGetHandleByIndex(gpu_index)
+        
+        # 获取GPU名称
+        gpu_name_bytes = pynvml.nvmlDeviceGetName(handle)
+        if isinstance(gpu_name_bytes, bytes):
+            gpu_name = gpu_name_bytes.decode('utf-8')
+        else:
+            gpu_name = str(gpu_name_bytes)
+        
+        # 获取GPU利用率（需要采样间隔来计算平均利用率）
+        utilization = pynvml.nvmlDeviceGetUtilizationRates(handle)
+        gpu_util = utilization.gpu
+        
+        # 获取内存信息
+        memory_info = pynvml.nvmlDeviceGetMemoryInfo(handle)
+        memory_used_gb = memory_info.used / 1024**3
+        memory_total_gb = memory_info.total / 1024**3
+        memory_available_gb = memory_info.free / 1024**3
+        memory_percent = (memory_info.used / memory_info.total) * 100
+        
+        # 获取温度
+        try:
+            temperature = pynvml.nvmlDeviceGetTemperature(handle, pynvml.NVML_TEMPERATURE_GPU)
+        except:
+            temperature = "N/A"
+        
+        # 获取功耗
+        try:
+            power = pynvml.nvmlDeviceGetPowerUsage(handle) / 1000.0  # 转换为瓦特
+        except:
+            power = "N/A"
+        
+        # 打印信息（类似checkcpu的格式）
+        print(f"GPU {gpu_index} ({gpu_name}):")
+        print(f"  GPU 使用率: {gpu_util}%")
+        print(f"  已用内存: {memory_used_gb:.2f} GB")
+        print(f"  可用内存: {memory_available_gb:.2f} GB")
+        print(f"  总内存: {memory_total_gb:.2f} GB ({memory_percent:.1f}%)")
+        print(f"  温度: {temperature}°C" if temperature != "N/A" else f"  温度: {temperature}")
+        print(f"  功耗: {power:.1f}W" if power != "N/A" else f"  功耗: {power}")
+        
+    except Exception as e:
+        print(f"获取GPU信息失败: {e}")

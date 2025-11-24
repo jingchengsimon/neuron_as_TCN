@@ -11,6 +11,7 @@ from utils.model_analysis import (
     load_model_results, print_model_summary, 
     plot_training_curves, plot_model_comparison, analyze_training_stability, plot_auc_analysis
 )
+from utils.model_size_utils import get_model_size_info, analyze_model_size
 # TensorFlow/Keras imports removed - using PyTorch instead
 from tqdm import tqdm
 import torch
@@ -18,22 +19,33 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.cuda as cuda
 
-def lr_warmup_decay(epoch, lr):
+def create_lr_warmup_decay(init_lr, max_lr):
     """
-    学习率warmup和decay调度
-    与TF版本保持一致：使用硬编码的init_lr和max_lr，忽略传入的lr参数
-    已根据batch_size=32调整（从8增加到32，学习率×2）
+    创建学习率warmup和decay调度函数（动态版本）
+    
+    Args:
+        init_lr: 初始学习率
+        max_lr: 最大学习率
+    
+    Returns:
+        function: 学习率调度函数
     """
     warmup_epochs = 10
-    init_lr = 0.0002  # 从0.0001增加到0.0002 (×2 for batch_size=32)
-    max_lr = 0.002    # 从0.001增加到0.002 (×2 for batch_size=32)
     decay_rate = 0.95
-    if epoch < warmup_epochs:
-        # 线性warmup
-        return init_lr + (max_lr - init_lr) * (epoch + 1) / warmup_epochs
-    else:
-        # 衰减
-        return max_lr * (decay_rate ** (epoch - warmup_epochs))
+    
+    def lr_warmup_decay(epoch, lr):
+        """
+        学习率warmup和decay调度
+        与TF版本保持一致：使用传入的init_lr和max_lr，忽略传入的lr参数
+        """
+        if epoch < warmup_epochs:
+            # 线性warmup
+            return init_lr + (max_lr - init_lr) * (epoch + 1) / warmup_epochs
+        else:
+            # 衰减
+            return max_lr * (decay_rate ** (epoch - warmup_epochs))
+    
+    return lr_warmup_decay
 
 def train_and_save(network_depth, num_filters_per_layer, input_window_size, num_epochs, 
                    train_data_dir, valid_data_dir, test_data_dir, models_dir,
@@ -61,38 +73,11 @@ def train_and_save(network_depth, num_filters_per_layer, input_window_size, num_
     train_files_per_epoch = 6 # 4  # 减少训练文件数量
     valid_files_per_epoch = 2 #max(1, int(validation_fraction * train_files_per_epoch))
 
-    # 增加batch_size以减少每个epoch的batch数量（保持窗口大小80不变）
-    # batch_size=32 -> batches_per_epoch约减至1/4（从11250到约2812）
-    # 学习率已根据batch_size=32调整（从8增加到32，学习率×2，使用平方根缩放）
-    batch_size = 32
-    batch_size_per_epoch = [batch_size] * num_epochs
-    learning_rate_per_epoch = [0.0002] * num_epochs  # 初始学习率 (0-40 epochs)
+    # batch_size和学习率将在模型创建后根据模型规模动态设置
+    # 先设置默认值（将在模型分析后更新）
+    batch_size = 64  # 默认值，将在模型分析后调整
     loss_weights_per_epoch = [[1.0, 0.02]] * num_epochs # [1.0, 0.01]
     num_train_steps_per_epoch = [100] * num_epochs
-
-    # 训练阶段配置：(起始epoch, 学习率, 损失权重)
-    training_stages = [
-        (40, 0.00006, [2.0, 0.01]), # [2.0, 0.005]
-        (80, 0.00002, [4.0, 0.01]), # [4.0, 0.002]
-        (120, 0.000006, [8.0, 0.01]), # [8.0, 0.001]
-        (160, 0.000002, [9.0, 0.003]), # [16.0, 0.001]
-    ]
-    
-    for start_epoch, lr, loss_weights in training_stages:
-        for i in range(start_epoch, num_epochs):
-            learning_rate_per_epoch[i] = lr
-            loss_weights_per_epoch[i] = loss_weights
-
-    learning_schedule_dict = {}
-    learning_schedule_dict['train_file_load']           = train_file_load
-    learning_schedule_dict['valid_file_load']           = valid_file_load
-    learning_schedule_dict['validation_fraction']       = validation_fraction
-    learning_schedule_dict['num_epochs']                = num_epochs
-    learning_schedule_dict['num_steps_multiplier']      = num_steps_multiplier
-    learning_schedule_dict['batch_size_per_epoch']      = batch_size_per_epoch
-    learning_schedule_dict['loss_weights_per_epoch']    = loss_weights_per_epoch
-    learning_schedule_dict['learning_rate_per_epoch']   = learning_rate_per_epoch
-    learning_schedule_dict['num_train_steps_per_epoch'] = num_train_steps_per_epoch
 
     # ------------------------------------------------------------------
     # define network architecture params
@@ -136,12 +121,6 @@ def train_and_save(network_depth, num_filters_per_layer, input_window_size, num_
     print('number of test files is %d' %(len(test_files)))
     print('-----------------------------------------------')
 
-    
-    # num_segments_exc  = 639 # 10042 + 16070
-    # if 'SJC' in train_data_dir:
-    #     num_segments_inh  = 640 # 1023 + 1637 + 150 
-    # else:
-    #     num_segments_inh  = 639 # 1023 + 1637 + 150 
     sample_file = train_files[0]
     with open(sample_file, 'rb') as f:
         sample_data = pickle.load(f)
@@ -168,12 +147,66 @@ def train_and_save(network_depth, num_filters_per_layer, input_window_size, num_
     spike_criterion = nn.BCELoss()
     soma_criterion = nn.MSELoss()
     
-    # Print model information
-    total_params = sum(p.numel() for p in temporal_conv_net.parameters())
-    trainable_params = sum(p.numel() for p in temporal_conv_net.parameters() if p.requires_grad)
-    print(f"Total model parameters: {total_params:,}")
-    print(f"Trainable parameters: {trainable_params:,}")
+    # Print model information and analyze model size
+    # 快速查看模型规模（简洁版）
+    total_params, size_category, batch_range = get_model_size_info(temporal_conv_net)
+    print(f"\n快速模型信息: {size_category}, 参数量: {total_params:,}, 推荐batch_size: {batch_range}\n")
+    
+    # 详细分析模型规模（详细版）
+    model_info = analyze_model_size(temporal_conv_net, verbose=True)
     print(f"Model moved to device: {next(temporal_conv_net.parameters()).device}")
+    
+    # ========== 根据模型规模动态调整batch_size和学习率 ==========
+    # 判断模型规模并设置batch_size
+    if "小模型" in size_category or "Small" in model_info['size_category']:
+        batch_size = 256
+        base_lr = 0.0006  # 小模型使用较小的学习率
+        print(f"\n检测到小模型，设置 batch_size = {batch_size}, base_lr = {base_lr}")
+    # elif "大模型" in size_category or "Large" in model_info['size_category']:
+    #     batch_size = 256
+    #     base_lr = 0.0006  # 大模型使用较大的学习率（从64到256，学习率×2）
+    #     print(f"\n检测到大模型，设置 batch_size = {batch_size}, base_lr = {base_lr}")
+    else:
+        batch_size = 8 # Because we set 400ms window size, the batch size should be smaller
+        base_lr = 0.0001  # Because we set 400ms window size, the learning rate should be smaller
+        print(f"\n检测到大模型，设置 batch_size = {batch_size}, base_lr = {base_lr}")
+    
+    # 根据batch_size设置学习率计划
+    batch_size_per_epoch = [batch_size] * num_epochs
+    learning_rate_per_epoch = [base_lr] * num_epochs  # 初始学习率 (0-40 epochs)
+    
+    # 训练阶段配置：(起始epoch, 学习率倍数, 损失权重)
+    # 学习率将根据base_lr动态计算
+    training_stages = [
+        (40, 0.3, [2.0, 0.01]),   # 学习率 = base_lr * 0.3 # [2.0, 0.005]
+        (80, 0.1, [4.0, 0.01]),   # 学习率 = base_lr * 0.1 # [4.0, 0.002]
+        (120, 0.03, [8.0, 0.01]), # 学习率 = base_lr * 0.03 # [8.0, 0.001]
+        (160, 0.01, [9.0, 0.003]), # 学习率 = base_lr * 0.01 # [16.0, 0.001]
+    ]
+    
+    for start_epoch, lr_ratio, loss_weights in training_stages:
+        for i in range(start_epoch, num_epochs):
+            learning_rate_per_epoch[i] = base_lr * lr_ratio
+            loss_weights_per_epoch[i] = loss_weights
+    
+    print(f"动态调整完成: batch_size = {batch_size}, 初始学习率 = {base_lr}")
+    print("=" * 60)
+    
+    # 创建动态的warmup函数（根据模型规模调整）
+    max_lr = base_lr * 10  # max_lr通常是init_lr的10倍
+    lr_warmup_decay_func = create_lr_warmup_decay(base_lr, max_lr)
+    
+    # 保存学习计划到字典
+    learning_schedule_dict = {}
+    learning_schedule_dict['train_file_load']           = train_file_load
+    learning_schedule_dict['valid_file_load']           = valid_file_load
+    learning_schedule_dict['validation_fraction']       = validation_fraction
+    learning_schedule_dict['num_epochs']                = num_epochs
+    learning_schedule_dict['num_steps_multiplier']      = num_steps_multiplier
+    learning_schedule_dict['batch_size_per_epoch']      = batch_size_per_epoch
+    learning_schedule_dict['loss_weights_per_epoch']    = loss_weights_per_epoch
+    learning_schedule_dict['learning_rate_per_epoch']   = learning_rate_per_epoch
+    learning_schedule_dict['num_train_steps_per_epoch'] = num_train_steps_per_epoch
 
     is_fully_connected = (network_depth == 1) or sum(filter_sizes_per_layer[1:]) == (network_depth -1)
     if is_fully_connected:
@@ -259,8 +292,8 @@ def train_and_save(network_depth, num_filters_per_layer, input_window_size, num_
             # Apply learning rate warmup/decay scheduling (matching TF version)
             # Calculate current learning rate based on mini_epoch within current learning_schedule
             # TF version uses lr_warmup_decay(epoch, lr) where epoch is the mini-epoch index
-            # Note: TF version uses hardcoded init_lr=0.0001 and max_lr=0.001, ignoring the lr parameter
-            current_lr = lr_warmup_decay(mini_epoch, learning_rate)
+            # Note: 使用动态创建的warmup函数（根据模型规模调整）
+            current_lr = lr_warmup_decay_func(mini_epoch, learning_rate)
             for g in optimizer.param_groups:
                 g['lr'] = current_lr
             
@@ -390,7 +423,7 @@ def train_and_save(network_depth, num_filters_per_layer, input_window_size, num_
         print('-----------------------------------------------------------------------------------------')
         
         # save model every once and a while
-        if np.array(training_history_dict['val_spikes_loss'][-3:]).mean() < 0.03:
+        if np.array(training_history_dict['val_spikes_loss'][-3:]).mean() < 0.05:
             model_ID = np.random.randint(100000)
             modelID_str = 'ID_%d' %(model_ID)
             train_string = 'samples_%d' %(num_training_samples)
@@ -491,7 +524,7 @@ def main():
 
     # Configure improvement options
     use_improved_initialization = False   # Set to True to enable improved initialization strategy
-    use_improved_sampling = True        # Set to True to enable improved data sampling strategy
+    use_improved_sampling = False        # Set to True to enable improved data sampling strategy
     spike_rich_ratio = 0.6              # 60% of samples contain spikes
     
     print(f"\n=== Improvement Configuration ===")
@@ -526,9 +559,10 @@ def main():
 
     # Basic configuration
     test_suffix = '' #'_SJC_funcgroup2_var2'
+
     # base_path = '/G/results/aim2_sjc/Models_TCN/Single_Neuron_InOut' + test_suffix
     # data_suffix = 'L5PC_NMDA'
-    # model_suffix = 'NMDA_torch_2'
+    # model_suffix = 'NMDA_torch'
 
     base_path = '/G/results/aim2_sjc/Models_TCN/IF_model_InOut' + test_suffix
     data_suffix = 'IF_model' 
