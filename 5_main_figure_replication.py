@@ -370,19 +370,26 @@ class MainFigureReplication:
         path_parts = model_dir.split('/')
         # Extract InOut suffix
         inout_suffix = 'original'
-        for part in path_parts:
-            if 'SJC' in part:
-                if 'AMPA' in part:
-                    inout_suffix = 'SJC_AMPA'
-                else:
-                    inout_suffix = 'SJC_NMDA'
-                break
+
+        if 'IF_model' in model_dir:
+            inout_suffix = 'IF'
+        else:
+            for part in path_parts:
+                if 'SJC' in part:
+                    if 'AMPA' in part:
+                        inout_suffix = 'SJC_AMPA'
+                    else:
+                        inout_suffix = 'SJC_NMDA'
+                    break
+
         # Extract strategy part
         strategy_part = path_parts[-3] if len(path_parts) >= 3 else path_parts[-1]
         if '_' in strategy_part:
             strategy_part = strategy_part.split('_', 1)[1]
         base_identifier = f"{inout_suffix}_{strategy_part}"
-        return f'{model_size}_{base_identifier}/fpr{desired_fpr}'
+        
+        return f'{base_identifier}/{model_size}/fpr{desired_fpr}'
+
     
     def _reconstruct_model_from_architecture(self, architecture_dict, device, base_path=""):
         """Reconstruct PyTorch model from architecture dictionary using TCNModel from fit_CNN_torch"""

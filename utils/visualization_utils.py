@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
+from sklearn.metrics import explained_variance_score
 
 # Common utility functions for reducing code duplication
 def _add_statistics_text(ax, stats_dict, position=(0.02, 0.98), fontsize=9, 
@@ -251,6 +252,11 @@ def plot_summary_panels(fpr, tpr, desired_fp_ind, y_spikes_GT, y_spikes_hat,
     rmse = np.sqrt(np.mean((x - y)**2))
     print(f"RMSE (voltage scatter): {rmse:.4f} mV")
     
+    # Calculate variance explained (explained variance score)
+    variance_explained = explained_variance_score(x, y)
+    variance_explained_percent = 100.0 * variance_explained
+    print(f"Variance explained: {variance_explained_percent:.2f}%")
+    
     # Downsample for performance
     if len(x) > 50000:
         idx = np.random.choice(len(x), 50000, replace=False)
@@ -303,9 +309,19 @@ def plot_voltage_traces(y_spikes_GT, y_spikes_hat, y_voltage_GT, y_voltage_hat,
             global_metrics = per_sample_global_metrics[selected_trace] if per_sample_global_metrics is not None else None
             optimal_metrics = per_sample_optimal_metrics[selected_trace] if per_sample_optimal_metrics is not None else None
 
+            # Calculate metrics
+            # global_metrics = calculate_sample_specific_fpr(spike_GT, spike_hat, global_threshold)
+            # optimal_result = find_optimal_threshold_for_sample(spike_GT, spike_hat, target_fpr=0.002)
+            # optimal_metrics = optimal_result['metrics']
+                
             spike_trace_pred_global = spike_hat > global_threshold
             output_spike_times_in_ms_pred_global = np.nonzero(spike_trace_pred_global)[0]
             voltage_hat[output_spike_times_in_ms_pred_global] = 0
+
+            if 'IF_model' in output_dir:
+                spike_trace_GT_global = spike_GT > 0.5
+                output_spike_times_in_ms_pred_global = np.nonzero(spike_trace_GT_global)[0]
+                voltage_GT[output_spike_times_in_ms_pred_global] = 0
 
             # Time axis
             sim_duration_ms = spike_GT.shape[0]
