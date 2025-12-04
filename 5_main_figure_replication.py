@@ -15,6 +15,106 @@ matplotlib.use('Agg')
 matplotlib.rcParams['pdf.fonttype'] = 42
 matplotlib.rcParams['svg.fonttype'] = 'none'
 
+# 配置PyTorch资源限制，防止系统过载（与TF版本一致的“严格模式”）
+def configure_pytorch_resources(
+    max_cpu_threads=None,
+    gpu_memory_fraction=None,
+    gpu_memory_limit_mb=None,
+):
+    """
+    配置PyTorch使用的CPU线程数和GPU内存
+    
+    Args:
+        max_cpu_threads: 最大使用的CPU线程数，None 表示使用自动检测（总核心数的 1/4，更保守）
+        gpu_memory_fraction: GPU 内存使用比例（0.0-1.0），None 表示不限制
+        gpu_memory_limit_mb: 按 MB 限制 GPU 内存（会转换为 fraction），None 表示不限制
+    """
+    print('\n' + '='*60)
+    print('Configuring PyTorch resource limits (STRICT MODE)')
+    print('='*60)
+    
+    # -------- CPU 线程数限制（更保守：总核心数的 1/4） --------
+    if max_cpu_threads is not None:
+        try:
+            torch.set_num_threads(max_cpu_threads)
+            torch.set_num_interop_threads(max_cpu_threads)
+            print(f'CPU threads limited to: {max_cpu_threads}')
+        except Exception as e:
+            print(f'Warning: Could not limit CPU threads: {e}')
+    else:
+        import multiprocessing
+        total_cores = multiprocessing.cpu_count()
+        safe_threads = max(1, total_cores // 4)  # 改为 1/4，更保守
+        try:
+            torch.set_num_threads(safe_threads)
+            torch.set_num_interop_threads(safe_threads)
+            print(f'Auto-limiting CPU threads to: {safe_threads} (out of {total_cores} total cores, 1/4 for safety)')
+        except Exception as e:
+            print(f'Warning: Could not auto-limit CPU threads: {e}')
+    
+    # -------- GPU 显存限制 --------
+    if torch.cuda.is_available():
+        try:
+            gpu_count = torch.cuda.device_count()
+            print(f'GPU devices available: {gpu_count}')
+            
+            # 如果指定了绝对 MB 限制，则转换为 fraction
+            if gpu_memory_limit_mb is not None:
+                for i in range(gpu_count):
+                    props = torch.cuda.get_device_properties(i)
+                    total_mb = props.total_memory / (1024**2)
+                    frac = min(1.0, max(0.01, gpu_memory_limit_mb / total_mb))
+                    torch.cuda.set_per_process_memory_fraction(frac, device=i)
+                    print(f'GPU {i} memory limited to ~{gpu_memory_limit_mb}MB ({frac:.2%} of {total_mb:.0f}MB)')
+            elif gpu_memory_fraction is not None:
+                for i in range(gpu_count):
+                    torch.cuda.set_per_process_memory_fraction(gpu_memory_fraction, device=i)
+                    print(f'GPU {i} memory fraction limited to: {gpu_memory_fraction:.2%}')
+            else:
+                # 默认启用缓存清理，但不强行限制显存
+                torch.cuda.empty_cache()
+                print('GPU memory cache cleared')
+            
+            # 打印 GPU 信息
+            for i in range(gpu_count):
+                gpu_name = torch.cuda.get_device_name(i)
+                gpu_memory_gb = torch.cuda.get_device_properties(i).total_memory / (1024**3)
+                print(f'GPU {i}: {gpu_name} ({gpu_memory_gb:.1f} GB)')
+        except Exception as e:
+            print(f'GPU configuration error: {e}')
+    else:
+        print('No GPU devices found, using CPU only')
+    
+    print('='*60 + '\n')
+
+# 在导入后立即配置（在 main 函数之前）
+# 默认限制为总核心数的 1/4，可以通过环境变量覆盖
+max_cpu_threads_env = os.environ.get('TORCH_MAX_CPU_THREADS')
+if max_cpu_threads_env:
+    max_cpu_threads = int(max_cpu_threads_env)
+else:
+    max_cpu_threads = None  # 将使用自动检测（总核心数的 1/4，更保守）
+
+# GPU 内存使用比例（可选，通过环境变量设置）
+gpu_memory_fraction_env = os.environ.get('TORCH_GPU_MEMORY_FRACTION')
+if gpu_memory_fraction_env:
+    gpu_memory_fraction = float(gpu_memory_fraction_env)
+else:
+    gpu_memory_fraction = None
+
+# GPU 内存 MB 限制（可选，通过环境变量设置）
+gpu_memory_limit_mb_env = os.environ.get('TORCH_GPU_MEMORY_LIMIT_MB')
+if gpu_memory_limit_mb_env:
+    gpu_memory_limit_mb = int(gpu_memory_limit_mb_env)
+else:
+    gpu_memory_limit_mb = None
+
+configure_pytorch_resources(
+    max_cpu_threads=max_cpu_threads,
+    gpu_memory_fraction=gpu_memory_fraction,
+    gpu_memory_limit_mb=gpu_memory_limit_mb,
+)
+
 class DeviceSelector:
     """Device selection utilities with safe fallbacks"""
     def get_optimal_device(self):
@@ -387,7 +487,7 @@ class MainFigureReplication:
         if '_' in strategy_part:
             strategy_part = strategy_part.split('_', 1)[1]
         base_identifier = f"{inout_suffix}_{strategy_part}"
-        
+
         return f'{base_identifier}/{model_size}/fpr{desired_fpr}'
 
     
@@ -588,12 +688,12 @@ def main(models_dir, data_dir, model_string='NMDA', model_size='large', desired_
 if __name__ == "__main__":
     data_suffix = 'NMDA'
 
-    # base_path = '/G/results/aim2_sjc/Models_TCN/Single_Neuron_InOut_SJC_funcgroup2_var2/'
-    # models_dir = base_path + f'models/{data_suffix}_torch/'
-    # data_dir = base_path + 'data/'
+    base_path = '/G/results/aim2_sjc/Models_TCN/Single_Neuron_InOut/'
+    models_dir = base_path + f'models/{data_suffix}_torch_ratio0.6/'
+    data_dir = base_path + 'data/'
 
-    models_dir = '/G/results/aim2_sjc/Models_TCN/IF_model_InOut/models/IF_model_torch/'
-    data_dir = '/G/results/aim2_sjc/Models_TCN/IF_model_InOut/data/'
+    # models_dir = '/G/results/aim2_sjc/Models_TCN/IF_model_InOut/models/IF_model_torch/'
+    # data_dir = '/G/results/aim2_sjc/Models_TCN/IF_model_InOut/data/'
     
     desired_fpr = 0.002
     

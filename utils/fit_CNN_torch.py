@@ -190,7 +190,7 @@ class TCNModel(nn.Module):
             # Follow Keras order: Conv -> Activation -> BatchNorm
             layers.append(conv)
             layers.append(get_activation(activation))
-            layers.append(nn.BatchNorm1d(num_features=num_filters, momentum=0.01, eps=0.001))
+            layers.append(nn.BatchNorm1d(num_features=num_filters, momentum=0.99, eps=0.001))
             # layers.append(nn.BatchNorm1d(num_features=num_filters))
             current_channels = num_filters
         

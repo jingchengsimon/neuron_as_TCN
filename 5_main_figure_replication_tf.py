@@ -6,6 +6,7 @@ import importlib.util
 import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
+import tensorflow as tf
 from keras.models import load_model
 from sklearn.metrics import mean_squared_error as MSE, mean_absolute_error as MAE
 from sklearn.metrics import explained_variance_score, roc_curve, auc
@@ -25,6 +26,96 @@ BaseMainFigureReplication = _TORCH_MFR.MainFigureReplication
 matplotlib.use('Agg')
 matplotlib.rcParams['pdf.fonttype'] = 42
 matplotlib.rcParams['svg.fonttype'] = 'none'
+
+# 配置TensorFlow资源限制，防止系统过载
+def configure_tensorflow_resources(max_cpu_cores=None, enable_gpu_memory_growth=True, gpu_memory_limit_mb=None):
+    """
+    配置TensorFlow使用的CPU核心数和GPU内存
+    
+    Args:
+        max_cpu_cores: 最大使用的CPU核心数，None表示使用自动检测（总核心数的1/4，更保守）
+        enable_gpu_memory_growth: 是否启用GPU内存自增长
+        gpu_memory_limit_mb: GPU内存限制（MB），None表示不限制
+    """
+    print('\n' + '='*60)
+    print('Configuring TensorFlow resource limits (STRICT MODE)')
+    print('='*60)
+    
+    # 限制CPU核心数 - 使用更保守的策略（1/4而不是1/2）
+    if max_cpu_cores is not None:
+        # 获取所有CPU核心
+        all_cpus = tf.config.list_physical_devices('CPU')
+        if all_cpus:
+            try:
+                # 限制线程数
+                tf.config.threading.set_intra_op_parallelism_threads(max_cpu_cores)
+                tf.config.threading.set_inter_op_parallelism_threads(max_cpu_cores)
+                print(f'CPU cores limited to: {max_cpu_cores}')
+            except Exception as e:
+                print(f'Warning: Could not limit CPU cores: {e}')
+        else:
+            print('No CPU devices found')
+    else:
+        # 自动检测并限制为总核心数的1/4（更保守，防止系统过载）
+        import multiprocessing
+        total_cores = multiprocessing.cpu_count()
+        safe_cores = max(1, total_cores // 4)  # 改为1/4，更保守
+        try:
+            tf.config.threading.set_intra_op_parallelism_threads(safe_cores)
+            tf.config.threading.set_inter_op_parallelism_threads(safe_cores)
+            print(f'Auto-limiting CPU cores to: {safe_cores} (out of {total_cores} total, 1/4 for safety)')
+        except Exception as e:
+            print(f'Warning: Could not auto-limit CPU cores: {e}')
+    
+    # 配置GPU内存
+    gpus = tf.config.list_physical_devices('GPU')
+    if gpus:
+        try:
+            for gpu in gpus:
+                if enable_gpu_memory_growth:
+                    tf.config.experimental.set_memory_growth(gpu, True)
+                    print(f'GPU memory growth enabled for {gpu.name}')
+                if gpu_memory_limit_mb is not None:
+                    # 限制GPU内存使用
+                    tf.config.set_logical_device_configuration(
+                        gpu,
+                        [tf.config.LogicalDeviceConfiguration(memory_limit=gpu_memory_limit_mb)]
+                    )
+                    print(f'GPU memory limited to {gpu_memory_limit_mb}MB for {gpu.name}')
+        except RuntimeError as e:
+            print(f'GPU configuration error: {e}')
+    else:
+        print('No GPU devices found, using CPU only')
+    
+    # 设置TensorFlow内存分配策略
+    try:
+        # 限制TensorFlow使用的系统内存
+        tf.config.experimental.set_memory_growth(tf.config.list_physical_devices('CPU')[0], True)
+    except:
+        pass
+    
+    print('='*60 + '\n')
+
+# 在导入后立即配置（在main函数之前）
+# 默认限制为总核心数的1/4，可以通过环境变量覆盖
+max_cpu_cores_env = os.environ.get('TF_MAX_CPU_CORES')
+if max_cpu_cores_env:
+    max_cpu_cores = int(max_cpu_cores_env)
+else:
+    max_cpu_cores = None  # 将使用自动检测（总核心数的1/4，更保守）
+
+# GPU内存限制（MB），可以通过环境变量设置
+gpu_memory_limit_env = os.environ.get('TF_GPU_MEMORY_LIMIT_MB')
+if gpu_memory_limit_env:
+    gpu_memory_limit_mb = int(gpu_memory_limit_env)
+else:
+    gpu_memory_limit_mb = None  # 不限制
+
+configure_tensorflow_resources(
+    max_cpu_cores=max_cpu_cores, 
+    enable_gpu_memory_growth=True,
+    gpu_memory_limit_mb=gpu_memory_limit_mb
+)
 
 ## Helper Functions
 def calc_AUC_at_desired_FP(y_test, y_test_hat, desired_fpr=0.01):
@@ -169,7 +260,35 @@ class MainFigureReplicationTF(BaseMainFigureReplication):
                 X_pad = np.zeros((curr_X.shape[0], padding_size, curr_X.shape[2]))
                 curr_X = np.hstack((curr_X, X_pad))
 
-            curr_y1, curr_y2 = temporal_conv_net.predict(curr_X)
+            # 使用更小的batch size进行预测，避免内存溢出和系统重启
+            # 进一步减小batch size以防止系统过载
+            max_batch_size = int(os.environ.get('TF_PREDICT_BATCH_SIZE', 8))  # 默认8，可通过环境变量调整
+            batch_size = min(max_batch_size, curr_X.shape[0])
+            
+            # 如果数据仍然太大，进一步分批处理
+            if curr_X.shape[0] > batch_size:
+                # 分批处理大数组
+                num_batches = (curr_X.shape[0] + batch_size - 1) // batch_size
+                curr_y1_list = []
+                curr_y2_list = []
+                
+                for batch_idx in range(num_batches):
+                    start_idx = batch_idx * batch_size
+                    end_idx = min((batch_idx + 1) * batch_size, curr_X.shape[0])
+                    batch_X = curr_X[start_idx:end_idx]
+                    
+                    batch_y1, batch_y2 = temporal_conv_net.predict(batch_X, batch_size=batch_size, verbose=0)
+                    curr_y1_list.append(batch_y1)
+                    curr_y2_list.append(batch_y2)
+                    
+                    # 清理中间变量（不清理session，避免清除模型）
+                    del batch_X, batch_y1, batch_y2
+                
+                curr_y1 = np.vstack(curr_y1_list)
+                curr_y2 = np.vstack(curr_y2_list)
+                del curr_y1_list, curr_y2_list
+            else:
+                curr_y1, curr_y2 = temporal_conv_net.predict(curr_X, batch_size=batch_size, verbose=0)
 
             if k == 0:
                 y1_hat[:, :end_time_ind, :] = curr_y1
@@ -195,6 +314,13 @@ class MainFigureReplicationTF(BaseMainFigureReplication):
         y_soma_GT = y2_data_for_TCN[:, :, 0]
         y_soma_hat = y2_hat[:, :, 0]
 
+        # 清理大型中间变量
+        del X_data_for_TCN, y1_data_for_TCN, y2_data_for_TCN
+        
+        # 强制垃圾回收（不清理session，避免清除模型）
+        import gc
+        gc.collect()
+        
         duration = (time.time() - start_time) / 60
         print(f'Prediction completed, took {duration:.3f} minutes')
 
@@ -217,9 +343,18 @@ def main(models_dir, data_dir, model_string='NMDA', model_size='large', desired_
     print('Step 1: Determining threshold from validation set')
     print('='*60)
     X_valid, y_spike_valid, y_soma_valid, y_soma_valid_transposed = mfr.load_validation_data(valid_files)
+    
+    # 清理数据加载后的内存
+    import gc
+    gc.collect()
+    
     y_spikes_valid_GT, y_spikes_valid_hat, y_soma_valid_GT, y_soma_valid_hat = mfr.predict_with_model(
         temporal_conv_net, X_valid, y_spike_valid, y_soma_valid, input_window_size, overlap_size
     )
+    
+    # 清理验证数据以释放内存
+    del X_valid, y_spike_valid, y_soma_valid
+    gc.collect()
 
     ignore_time_at_start_ms = 500
     time_points_to_eval_valid = np.arange(y_spikes_valid_GT.shape[1]) >= ignore_time_at_start_ms
@@ -241,9 +376,18 @@ def main(models_dir, data_dir, model_string='NMDA', model_size='large', desired_
     print('Step 2: Evaluating on test set using threshold from validation')
     print('='*60)
     X_test, y_spike_test, y_soma_test, y_soma_test_transposed = mfr.load_test_data(test_files)
+    
+    # 清理数据加载后的内存
+    import gc
+    gc.collect()
+    
     y_spikes_GT, y_spikes_hat, y_soma_GT, y_soma_hat = mfr.predict_with_model(
         temporal_conv_net, X_test, y_spike_test, y_soma_test, input_window_size, overlap_size
     )
+    
+    # 清理测试数据以释放内存
+    del X_test, y_spike_test, y_soma_test
+    gc.collect()
 
     mfr.evaluate_and_visualize(
         y_spikes_GT, y_spikes_hat, y_soma_GT, y_soma_hat,
@@ -252,13 +396,19 @@ def main(models_dir, data_dir, model_string='NMDA', model_size='large', desired_
 
         
 if __name__ == "__main__":
-    # models_dir = '/G/results/aim2_sjc/Models_TCN/Single_Neuron_InOut/models/NMDA_tensorflow/'
-    # data_dir = '/G/results/aim2_sjc/Models_TCN/Single_Neuron_InOut/data/'
 
-    models_dir = '/G/results/aim2_sjc/Models_TCN/IF_model_InOut/models/IF_model_tensorflow/'
-    data_dir = '/G/results/aim2_sjc/Models_TCN/IF_model_InOut/data/'
+    data_suffix = 'NMDA'
+
+    base_path = '/G/results/aim2_sjc/Models_TCN/Single_Neuron_InOut/'
+    models_dir = base_path + f'models/{data_suffix}_tensorflow_ratio0.6/'
+    data_dir = base_path + 'data/'
+
+    # models_dir = '/G/results/aim2_sjc/Models_TCN/IF_model_InOut/models/IF_model_tensorflow/'
+    # data_dir = '/G/results/aim2_sjc/Models_TCN/IF_model_InOut/data/'
+    
     desired_fpr = 0.002
     
-    main(models_dir, data_dir, 'NMDA', 'large', desired_fpr)
+    
+    main(models_dir, data_dir, data_suffix, 'large', desired_fpr)
 
 

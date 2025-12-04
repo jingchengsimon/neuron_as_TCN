@@ -719,9 +719,9 @@ def main():
     print("==================\n")
 
     # 1. 定义超参数网格
-    network_depth_list = [1]
-    num_filters_per_layer_list = [1]  # 其它参数可固定或自行调整
-    input_window_size_list = [80]  # 这里遍历不同的input_window_size
+    network_depth_list = [7]
+    num_filters_per_layer_list = [256]  # 其它参数可固定或自行调整
+    input_window_size_list = [400]  # 这里遍历不同的input_window_size
 
     num_epochs = 200
 
@@ -729,7 +729,7 @@ def main():
 
     # 配置改进选项
     use_improved_initialization = False   # 设置为True启用改进的初始化策略
-    use_improved_sampling = False        # 设置为True启用改进的数据采样策略
+    use_improved_sampling = True       # 设置为True启用改进的数据采样策略
     spike_rich_ratio = 0.6              # 60%的样本包含spike
     
     print(f"\n=== 改进配置 ===")
@@ -767,10 +767,14 @@ def main():
 
         # 基础配置
         test_suffix = '' #'_SJC_funcgroup2_var2'
-        
-        base_path = '/G/results/aim2_sjc/Models_TCN/IF_model_InOut' + test_suffix
-        data_suffix = 'IF_model' #'L5PC_NMDA'
-        model_suffix = 'IF_model_tensorflow' #'NMDA_tensorflow'
+
+        base_path = '/G/results/aim2_sjc/Models_TCN/Single_Neuron_InOut' + test_suffix
+        data_suffix = 'L5PC_NMDA'
+        model_suffix = 'NMDA_tensorflow_ratio0.6'
+            
+        # base_path = '/G/results/aim2_sjc/Models_TCN/IF_model_InOut' + test_suffix
+        # data_suffix = 'IF_model' #'L5PC_NMDA'
+        # model_suffix = 'IF_model_tensorflow' #'NMDA_tensorflow'
         
         # 动态构建analysis suffix
         analysis_suffix = build_analysis_suffix(base_path, model_suffix)

@@ -254,12 +254,30 @@ def train_and_save(network_depth, num_filters_per_layer, input_window_size, num_
         
         # 优化器只初始化一次；学习率在每个schedule设置
         if learning_schedule == 0:
+            # 分离输出层参数和其他层参数，以便为输出层设置更小的L2正则化
+            # 匹配TensorFlow版本：卷积层使用l2(1e-6)，输出层使用l2(1e-8)
+            output_params = list(temporal_conv_net.spikes_head.parameters()) + \
+                            list(temporal_conv_net.soma_head.parameters())
+            other_params = [p for n, p in temporal_conv_net.named_parameters() 
+                           if 'spikes_head' not in n and 'soma_head' not in n]
+            
             try:
-                # In torch, weight_decay is equivalent to L2 regularization and is applied to all parameters (global)
-                # In keras, L2 regularization is applied to each layer separately (local)
-                optimizer = optim.NAdam(temporal_conv_net.parameters(), lr=learning_rate, weight_decay=l2_regularization_per_layer[0])
+                # 使用参数组为不同层设置不同的weight_decay
+                # 卷积层使用l2_regularization_per_layer[0] (1e-6)
+                # 输出层使用1e-8，与TensorFlow版本一致
+                optimizer = optim.NAdam([
+                    {'params': other_params, 'weight_decay': l2_regularization_per_layer[0]},  # 1e-6
+                    {'params': output_params, 'weight_decay': 1e-8}  # 输出层使用1e-8
+                ], lr=learning_rate, eps=1e-7)  # eps=1e-7匹配TensorFlow NAdam的默认值
             except Exception:
-                optimizer = optim.Adam(temporal_conv_net.parameters(), lr=learning_rate, weight_decay=l2_regularization_per_layer[0])
+                optimizer = optim.Adam([
+                    {'params': other_params, 'weight_decay': l2_regularization_per_layer[0]},  # 1e-6
+                    {'params': output_params, 'weight_decay': 1e-8}  # 输出层使用1e-8
+                ], lr=learning_rate, eps=1e-7)
+            
+            print(f'Optimizer initialized with parameter groups:')
+            print(f'  - Other layers: weight_decay={l2_regularization_per_layer[0]}')
+            print(f'  - Output layers: weight_decay=1e-8')
         else:
             for g in optimizer.param_groups:
                 g['lr'] = learning_rate
@@ -516,15 +534,15 @@ def main():
     print("==================\n")
 
     # 1. Define hyperparameter grid
-    network_depth_list = [1]
-    num_filters_per_layer_list = [1]  # Other parameters can be fixed or adjusted
-    input_window_size_list = [80]  # Traverse different input_window_size here
+    network_depth_list = [7]
+    num_filters_per_layer_list = [256]  # Other parameters can be fixed or adjusted
+    input_window_size_list = [400]  # Traverse different input_window_size here
 
     num_epochs = 200
 
     # Configure improvement options
     use_improved_initialization = False   # Set to True to enable improved initialization strategy
-    use_improved_sampling = False        # Set to True to enable improved data sampling strategy
+    use_improved_sampling = True      # Set to True to enable improved data sampling strategy
     spike_rich_ratio = 0.6              # 60% of samples contain spikes
     
     print(f"\n=== Improvement Configuration ===")
@@ -558,15 +576,15 @@ def main():
         return analysis_suffix
 
     # Basic configuration
-    test_suffix = '' #'_SJC_funcgroup2_var2'
+    test_suffix = '_SJC_funcgroup2_var2'
 
-    # base_path = '/G/results/aim2_sjc/Models_TCN/Single_Neuron_InOut' + test_suffix
-    # data_suffix = 'L5PC_NMDA'
-    # model_suffix = 'NMDA_torch'
+    base_path = '/G/results/aim2_sjc/Models_TCN/Single_Neuron_InOut' + test_suffix
+    data_suffix = 'L5PC_NMDA'
+    model_suffix = 'NMDA_torch_ratio0.6'
 
-    base_path = '/G/results/aim2_sjc/Models_TCN/IF_model_InOut' + test_suffix
-    data_suffix = 'IF_model' 
-    model_suffix = 'IF_model_torch' 
+    # base_path = '/G/results/aim2_sjc/Models_TCN/IF_model_InOut' + test_suffix
+    # data_suffix = 'IF_model' 
+    # model_suffix = 'IF_model_torch' 
     
     # Dynamically build analysis suffix
     analysis_suffix = build_analysis_suffix(test_suffix, model_suffix)
