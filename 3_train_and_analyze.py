@@ -5,6 +5,7 @@ import os
 import pickle
 from datetime import datetime  
 from itertools import product
+import argparse
 from utils.gpu_monitor import GPUMonitor, configure_pytorch_gpu, get_gpu_memory_info
 from utils.fit_CNN_torch import TCNModel, SimulationDataGenerator
 from utils.model_analysis import (
@@ -18,6 +19,71 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.cuda as cuda
+
+def parse_args():
+    """
+    Parse command line arguments for main training configuration.
+    默认值与脚本中原先硬编码的值保持一致，这样不传参数时行为完全相同。
+    """
+    parser = argparse.ArgumentParser(
+        description="Train and analyze TCN Poisson model (PyTorch version)"
+    )
+    parser.add_argument(
+        "--network_depth_list",
+        type=int,
+        nargs="+",
+        default=[7],
+        help="List of network depths to sweep, e.g. --network_depth_list 5 7",
+    )
+    parser.add_argument(
+        "--num_filters_per_layer_list",
+        type=int,
+        nargs="+",
+        default=[256],
+        help="List of num_filters_per_layer values, e.g. --num_filters_per_layer_list 128 256",
+    )
+    parser.add_argument(
+        "--input_window_size_list",
+        type=int,
+        nargs="+",
+        default=[400],
+        help="List of input_window_size (ms) values, e.g. --input_window_size_list 200 400",
+    )
+    parser.add_argument(
+        "--num_epochs",
+        type=int,
+        default=200,
+        help="Number of epochs for training (per configuration).",
+    )
+    parser.add_argument(
+        "--test_suffix",
+        type=str,
+        default="_SJC_funcgroup2_var2",
+        help="Suffix for selecting test configuration, e.g. _SJC_funcgroup2_var2",
+    )
+    parser.add_argument(
+        "--base_subpath",
+        type=str,
+        default="Single_Neuron_InOut",
+        help=(
+            "Sub-path under /G/results/aim2_sjc/Models_TCN/ used to build base_path.\n"
+            "For example, 'Single_Neuron_InOut' will result in "
+            "'/G/results/aim2_sjc/Models_TCN/Single_Neuron_InOut' + test_suffix"
+        ),
+    )
+    parser.add_argument(
+        "--data_suffix",
+        type=str,
+        default="L5PC_NMDA",
+        help="Data suffix used in data directory names, e.g. L5PC_NMDA or IF_model",
+    )
+    parser.add_argument(
+        "--model_suffix",
+        type=str,
+        default="NMDA_torch_ratio0.6",
+        help="Model suffix used in model directory names, e.g. NMDA_torch_ratio0.6",
+    )
+    return parser.parse_args()
 
 def create_lr_warmup_decay(init_lr, max_lr):
     """
@@ -520,6 +586,7 @@ def analyze_and_save(models_dir, test_data_dir, save_dir):
         print(f"Best ROC AUC: {best_model['auc_metrics']['roc_auc_spike']:.4f}")
 
 def main():
+    args = parse_args()
     # ========== PyTorch GPU Configuration ==========
     print("=== PyTorch GPU Configuration ===")
     device = configure_pytorch_gpu()
@@ -533,12 +600,20 @@ def main():
         print("GPU monitoring not available, please install: pip install nvidia-ml-py")
     print("==================\n")
 
-    # 1. Define hyperparameter grid
-    network_depth_list = [7]
-    num_filters_per_layer_list = [256]  # Other parameters can be fixed or adjusted
-    input_window_size_list = [400]  # Traverse different input_window_size here
+    # 1. Define hyperparameter grid (can be overridden from command line)
+    network_depth_list = args.network_depth_list
+    num_filters_per_layer_list = args.num_filters_per_layer_list  # Other parameters can be fixed or adjusted
+    input_window_size_list = args.input_window_size_list  # Traverse different input_window_size here
 
-    num_epochs = 200
+    num_epochs = args.num_epochs
+
+    # Basic configuration (can be overridden from command line)
+    test_suffix = args.test_suffix
+    base_prefix = "/G/results/aim2_sjc/Models_TCN/"
+    base_subpath = args.base_subpath.rstrip("/")  # ensure no trailing slash
+    base_path = base_prefix + base_subpath + test_suffix
+    data_suffix = args.data_suffix
+    model_suffix = args.model_suffix
 
     # Configure improvement options
     use_improved_initialization = False   # Set to True to enable improved initialization strategy
@@ -575,17 +650,6 @@ def main():
             analysis_suffix = f"{test_suffix}_{model_part}"
         return analysis_suffix
 
-    # Basic configuration
-    test_suffix = '_SJC_funcgroup2_var2'
-
-    base_path = '/G/results/aim2_sjc/Models_TCN/Single_Neuron_InOut' + test_suffix
-    data_suffix = 'L5PC_NMDA'
-    model_suffix = 'NMDA_torch_ratio0.6'
-
-    # base_path = '/G/results/aim2_sjc/Models_TCN/IF_model_InOut' + test_suffix
-    # data_suffix = 'IF_model' 
-    # model_suffix = 'IF_model_torch' 
-    
     # Dynamically build analysis suffix
     analysis_suffix = build_analysis_suffix(test_suffix, model_suffix)
 
