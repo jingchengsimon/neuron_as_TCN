@@ -4,10 +4,10 @@ import sys
 import os
 import pickle
 
-# 设置TensorFlow日志级别，减少警告信息
+# Set TensorFlow log level to reduce warning messages
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
-# 禁用TensorFlow的图优化器警告
+# Disable TensorFlow graph optimizer warnings
 import tensorflow.compat.v1 as tf
 tf.disable_v2_behavior()
 tf.logging.set_verbosity(tf.logging.ERROR)
@@ -33,14 +33,14 @@ else:
 
 def dict2bin(row_inds_spike_times_map, num_segments, sim_duration_ms, syn_type, data_type=None):
     
-    # 在循环开始前对字典的key进行批量操作
+    # Batch process dictionary keys before the loop
     if syn_type == 'exc' and (data_type or '').lower() == 'sjc':
-        # 对兴奋性突触字典，在SJC数据时将所有key减1（从1-639变为0-638）
+        # For excitatory synapse dictionary, subtract 1 from all keys in SJC data (from 1-639 to 0-638)
         adjusted_dict = {}
         for key, value in row_inds_spike_times_map.items():
             adjusted_dict[key - 1] = value
         row_inds_spike_times_map = adjusted_dict
-    # 对于inh类型，不需要修改key
+    # For inh type, no need to modify keys
 
     bin_spikes_matrix = np.zeros((num_segments, sim_duration_ms), dtype='bool')            
     for row_ind in row_inds_spike_times_map.keys():
@@ -113,12 +113,12 @@ def create_temporaly_convolutional_model(max_input_window_size, num_segments_exc
                                                                                              initializer_per_layer,
                                                                                              use_improved_initialization=False):
     """
-    创建时间卷积网络模型
+    Create temporal convolutional network model
     
     Args:
-        use_improved_initialization: 是否使用改进的初始化策略
-            False: 使用原有方案
-            True: 使用改进方案（更好的spike输出初始化、Focal Loss等）
+        use_improved_initialization: Whether to use improved initialization strategy
+            False: Use original scheme
+            True: Use improved scheme (better spike output initialization, Focal Loss, etc.)
     """
     
     # define input and flatten it
@@ -182,22 +182,22 @@ class SimulationDataGenerator(keras.utils.Sequence):
                  ignore_time_from_start=500, y_train_soma_bias=-67.7, y_soma_threshold=-55.0):
         """
         Args:
-            use_improved_sampling: 是否使用改进的数据采样策略
-                False: 使用原有随机采样
-                True: 优先选择包含spike的时间窗口
-            spike_rich_ratio: 包含spike的样本比例 (仅在use_improved_sampling=True时有效)
+            use_improved_sampling: Whether to use improved data sampling strategy
+                False: Use original random sampling
+                True: Prioritize time windows containing spikes
+            spike_rich_ratio: Ratio of samples containing spikes (only effective when use_improved_sampling=True)
         """
         'data generator initialization'
         
         self.sim_experiment_files = sim_experiment_files
         
-        # 检查文件数量，确保num_files_per_epoch不超过实际可用的文件数量
+        # Check file count, ensure num_files_per_epoch doesn't exceed available files
         if len(self.sim_experiment_files) == 0:
-            raise ValueError(f"没有找到任何实验文件")
+            raise ValueError(f"No experiment files found")
         
         if num_files_per_epoch > len(self.sim_experiment_files):
-            print(f"警告: 请求的num_files_per_epoch ({num_files_per_epoch}) 超过了可用文件数量 ({len(self.sim_experiment_files)})")
-            print(f"将num_files_per_epoch调整为 {len(self.sim_experiment_files)}")
+            print(f"Warning: Requested num_files_per_epoch ({num_files_per_epoch}) exceeds available file count ({len(self.sim_experiment_files)})")
+            print(f"Adjusting num_files_per_epoch to {len(self.sim_experiment_files)}")
             num_files_per_epoch = len(self.sim_experiment_files)
         
         self.num_files_per_epoch = num_files_per_epoch
@@ -233,9 +233,9 @@ class SimulationDataGenerator(keras.utils.Sequence):
         print('num batches per file = %d. coming from (%dx%d),(%dx%d)' %(self.batches_per_file, self.num_simulations_per_file,
                                                                          self.sim_duration_ms, self.batch_size, self.window_size_ms))
         if self.use_improved_sampling:
-            print('使用改进的数据采样策略: spike-rich比例 = %.1f%%' %(self.spike_rich_ratio * 100))
+            print('Using improved data sampling strategy: spike-rich ratio = %.1f%%' %(self.spike_rich_ratio * 100))
         else:
-            print('使用原有随机采样策略')
+            print('Using original random sampling strategy')
         print('-------------------------------------------------------------------------')
 
     def __len__(self):
@@ -248,11 +248,11 @@ class SimulationDataGenerator(keras.utils.Sequence):
         if ((batch_ind_within_epoch + 1) % self.batches_per_file) == 0:
             self.load_new_file()
             
-        # 根据配置选择不同的采样策略
+        # Choose different sampling strategies based on configuration
         if self.use_improved_sampling:
             selected_sim_inds, selected_end_time_inds = self._select_balanced_windows()
         else:
-            # 原有随机采样策略
+            # Original random sampling strategy
             selected_sim_inds = np.random.choice(range(self.num_simulations_per_file), size=self.batch_size, replace=True)
             sampling_end_time = max(self.ignore_time_from_start, self.window_size_ms)
             selected_end_time_inds = np.random.choice(range(sampling_end_time, self.sim_duration_ms), size=self.batch_size, replace=False)
@@ -276,33 +276,33 @@ class SimulationDataGenerator(keras.utils.Sequence):
         return (X_batch, [y_spike_batch, y_soma_batch])
 
     def _select_balanced_windows(self):
-        """改进的采样策略：优先选择包含spike的时间窗口"""
+        """Improved sampling strategy: prioritize time windows containing spikes"""
         num_spike_rich = int(self.batch_size * self.spike_rich_ratio)
         num_random = self.batch_size - num_spike_rich
         
-        # 1. 选择包含spike的时间窗口
+        # 1. Select time windows containing spikes
         spike_rich_windows = []
         sampling_end_time = max(self.ignore_time_from_start, self.window_size_ms)
         for sim_ind in range(self.num_simulations_per_file):
             spike_times = self.y_spike[sim_ind, :, 0]
-            if np.sum(spike_times) > 0:  # 如果这个模拟包含spikes
-                # 选择以spike为中心的时间窗口
+            if np.sum(spike_times) > 0:  # If this simulation contains spikes
+                # Select time windows centered on spikes
                 for spike_time in np.where(spike_times)[0]:
-                    # 计算窗口结束时间（与 __getitem__ 保持一致，win_time 为右闭切片的上界）
+                    # Calculate window end time (consistent with __getitem__, win_time is right-closed slice upper bound)
                     end_time = spike_time + self.window_size_ms // 2
                     start_time = end_time - self.window_size_ms
-                    # 强约束：win_time >= ignore_time_from_start，且窗口完整落在 [0, sim_duration)
+                    # Strong constraint: win_time >= ignore_time_from_start, and window completely falls within [0, sim_duration)
                     if (end_time >= sampling_end_time and
                         end_time < self.sim_duration_ms and
                         start_time >= 0):
                         spike_rich_windows.append((sim_ind, end_time))
         
-        # 如果spike-rich窗口不够，重复一些
+        # If spike-rich windows are insufficient, repeat some
         if len(spike_rich_windows) > 0 and len(spike_rich_windows) < num_spike_rich:
             repeat_times = (num_spike_rich // len(spike_rich_windows)) + 1
             spike_rich_windows = np.tile(spike_rich_windows, (repeat_times, 1))
         
-        # 随机选择spike-rich窗口
+        # Randomly select spike-rich windows
         if len(spike_rich_windows) > 0:
             selected_spike_rich = np.random.choice(len(spike_rich_windows), 
                                                  size=min(num_spike_rich, len(spike_rich_windows)), 
@@ -311,11 +311,11 @@ class SimulationDataGenerator(keras.utils.Sequence):
         else:
             selected_wins_spike_rich = []
         
-        # 2. 补充随机窗口
+        # 2. Supplement with random windows
         selected_wins_random = []
         available_times = list(range(sampling_end_time, self.sim_duration_ms))
         
-        # 避免与spike-rich窗口重叠
+        # Avoid overlap with spike-rich windows
         for sim_ind, end_time in selected_wins_spike_rich:
             for t in range(max(sampling_end_time, end_time - self.window_size_ms), 
                           min(self.sim_duration_ms, end_time + self.window_size_ms)):
@@ -327,14 +327,14 @@ class SimulationDataGenerator(keras.utils.Sequence):
             selected_sim_inds_random = np.random.choice(range(self.num_simulations_per_file), size=num_random, replace=True)
             selected_wins_random = list(zip(selected_sim_inds_random, selected_end_time_inds_random))
         else:
-            # 如果可用时间不够，允许重复
+            # If available times are insufficient, allow repetition
             selected_end_time_inds_random = np.random.choice(available_times, size=num_random, replace=True)
             selected_sim_inds_random = np.random.choice(range(self.num_simulations_per_file), size=num_random, replace=True)
             selected_wins_random = list(zip(selected_sim_inds_random, selected_end_time_inds_random))
         
-        # 3. 合并并返回
+        # 3. Combine and return
         all_windows = selected_wins_spike_rich + selected_wins_random
-        np.random.shuffle(all_windows)  # 随机打乱顺序
+        np.random.shuffle(all_windows)  # Randomly shuffle order
         
         selected_sim_inds = [w[0] for w in all_windows]
         selected_end_time_inds = [w[1] for w in all_windows]

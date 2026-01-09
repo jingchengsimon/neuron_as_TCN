@@ -6,7 +6,8 @@ import pickle
 from datetime import datetime  
 from itertools import product
 # from fit_CNN_pytorch import train_and_save_pytorch
-from utils.fit_CNN import create_temporaly_convolutional_model, SimulationDataGenerator
+from utils.gpu_monitor import GPUMonitor
+from utils.fit_CNN_tf import create_temporaly_convolutional_model, SimulationDataGenerator
 from utils.model_analysis import (
     load_model_results, print_model_summary, 
     plot_training_curves, plot_model_comparison, analyze_training_stability, plot_auc_analysis
@@ -17,259 +18,31 @@ from keras.optimizers import Nadam
 from keras.callbacks import LearningRateScheduler, Callback
 from tqdm import tqdm
 
-# 添加GPU监控库
-try:
-    import pynvml
-    pynvml.nvmlInit()
-    GPU_MONITORING_AVAILABLE = True
-except ImportError:
-    print("Warning: pynvml not available. Install with: pip install nvidia-ml-py")
-    GPU_MONITORING_AVAILABLE = False
-
-class GPUMonitor:
-    """GPU监控类，用于监控GPU使用情况和性能"""
-    
-    def __init__(self, gpu_index=0):
-        """
-        初始化GPU监控器
-        
-        Args:
-            gpu_index: GPU设备索引，默认为0
-        """
-        self.gpu_index = gpu_index
-        self.available = GPU_MONITORING_AVAILABLE
-        self.handle = None
-        
-        if self.available:
-            try:
-                self.handle = pynvml.nvmlDeviceGetHandleByIndex(gpu_index)
-                gpu_name_bytes = pynvml.nvmlDeviceGetName(self.handle)
-                # 处理不同版本的pynvml返回格式
-                if isinstance(gpu_name_bytes, bytes):
-                    self.gpu_name = gpu_name_bytes.decode('utf-8')
-                else:
-                    self.gpu_name = str(gpu_name_bytes)
-                self.total_memory = pynvml.nvmlDeviceGetMemoryInfo(self.handle).total
-            except Exception as e:
-                print(f"Error initializing GPU monitor: {e}")
-                self.available = False
-    
-    def get_utilization(self):
-        """获取GPU利用率"""
-        if not self.available or not self.handle:
-            return "N/A"
-        
-        try:
-            utilization = pynvml.nvmlDeviceGetUtilizationRates(self.handle)
-            return utilization.gpu
-        except:
-            return "Error"
-    
-    def get_memory_usage(self):
-        """获取GPU内存使用情况"""
-        if not self.available or not self.handle:
-            return "N/A"
-        
-        try:
-            memory_info = pynvml.nvmlDeviceGetMemoryInfo(self.handle)
-            used_mb = memory_info.used / 1024 / 1024
-            total_mb = memory_info.total / 1024 / 1024
-            return f"{used_mb:.0f}/{total_mb:.0f} MB"
-        except:
-            return "Error"
-    
-    def get_memory_percent(self):
-        """获取GPU内存使用百分比"""
-        if not self.available or not self.handle:
-            return "N/A"
-        
-        try:
-            memory_info = pynvml.nvmlDeviceGetMemoryInfo(self.handle)
-            return (memory_info.used / memory_info.total) * 100
-        except:
-            return "Error"
-    
-    def get_temperature(self):
-        """获取GPU温度"""
-        if not self.available or not self.handle:
-            return "N/A"
-        
-        try:
-            temp = pynvml.nvmlDeviceGetTemperature(self.handle, pynvml.NVML_TEMPERATURE_GPU)
-            return temp
-        except:
-            return "Error"
-    
-    def get_power_usage(self):
-        """获取GPU功耗"""
-        if not self.available or not self.handle:
-            return "N/A"
-        
-        try:
-            power = pynvml.nvmlDeviceGetPowerUsage(self.handle) / 1000.0  # 转换为瓦特
-            return power
-        except:
-            return "Error"
-    
-    def get_comprehensive_info(self):
-        """获取GPU综合信息"""
-        if not self.available:
-            return {
-                'name': 'N/A',
-                'utilization': 'N/A',
-                'memory_usage': 'N/A',
-                'memory_percent': 'N/A',
-                'temperature': 'N/A',
-                'power': 'N/A'
-            }
-        
-        return {
-            'name': self.gpu_name if hasattr(self, 'gpu_name') else 'N/A',
-            'utilization': self.get_utilization(),
-            'memory_usage': self.get_memory_usage(),
-            'memory_percent': self.get_memory_percent(),
-            'temperature': self.get_temperature(),
-            'power': self.get_power_usage()
-        }
-    
-    def print_status(self, prefix=""):
-        """打印当前GPU状态"""
-        info = self.get_comprehensive_info()
-        print(f"{prefix}GPU: {info['name']}")
-        print(f"{prefix}利用率: {info['utilization']}%")
-        print(f"{prefix}内存: {info['memory_usage']} ({info['memory_percent']:.1f}%)")
-        print(f"{prefix}温度: {info['temperature']}°C")
-        print(f"{prefix}功耗: {info['power']}W")
-    
-    def monitor_continuously(self, duration_seconds=300, interval_seconds=5, output_file=None):
-        """
-        持续监控GPU使用情况
-        
-        Args:
-            duration_seconds: 监控持续时间（秒）
-            interval_seconds: 监控间隔（秒）
-            output_file: 输出文件路径（可选）
-        """
-        if not self.available:
-            print("GPU monitoring not available")
-            return
-        
-        print(f"\n开始GPU监控 ({duration_seconds}秒, 每{interval_seconds}秒记录一次):")
-        print("时间戳           | GPU利用率(%) | 内存使用(MB) | 内存使用率(%) | 温度(°C) | 功耗(W)")
-        print("-" * 90)
-        
-        if output_file:
-            with open(output_file, 'w') as f:
-                f.write("timestamp,utilization,memory_used,memory_percent,temperature,power\n")
-        
-        start_time = time.time()
-        end_time = start_time + duration_seconds
-        
-        try:
-            while time.time() < end_time:
-                elapsed = time.time() - start_time
-                info = self.get_comprehensive_info()
-                
-                timestamp = time.strftime("%H:%M:%S")
-                line = f"{timestamp} | {info['utilization']:11} | {info['memory_usage']:10} | {info['memory_percent']:12.1f} | {info['temperature']:8} | {info['power']:6}"
-                print(line)
-                
-                if output_file:
-                    with open(output_file, 'a') as f:
-                        f.write(f"{timestamp},{info['utilization']},{info['memory_usage']},{info['memory_percent']},{info['temperature']},{info['power']}\n")
-                
-                time.sleep(interval_seconds)
-        except KeyboardInterrupt:
-            print("\n监控已停止")
-        
-        print("-" * 90)
-        print("GPU监控完成")
-    
-    def benchmark_performance(self, test_duration=60):
-        """
-        性能基准测试
-        
-        Args:
-            test_duration: 测试持续时间（秒）
-        """
-        if not self.available:
-            print("GPU monitoring not available for benchmarking")
-            return
-        
-        print(f"\n开始GPU性能基准测试 ({test_duration}秒)...")
-        
-        # 收集性能数据
-        utilizations = []
-        memory_percents = []
-        temperatures = []
-        power_usages = []
-        
-        start_time = time.time()
-        end_time = start_time + test_duration
-        
-        while time.time() < end_time:
-            info = self.get_comprehensive_info()
-            
-            if info['utilization'] != 'N/A' and info['utilization'] != 'Error':
-                utilizations.append(info['utilization'])
-            if info['memory_percent'] != 'N/A' and info['memory_percent'] != 'Error':
-                memory_percents.append(info['memory_percent'])
-            if info['temperature'] != 'N/A' and info['temperature'] != 'Error':
-                temperatures.append(info['temperature'])
-            if info['power'] != 'N/A' and info['power'] != 'Error':
-                power_usages.append(info['power'])
-            
-            time.sleep(1)
-        
-        # 计算统计信息
-        print("\n=== 性能基准测试结果 ===")
-        if utilizations:
-            print(f"GPU利用率 - 平均: {np.mean(utilizations):.1f}%, 最大: {np.max(utilizations):.1f}%, 最小: {np.min(utilizations):.1f}%")
-        if memory_percents:
-            print(f"内存使用率 - 平均: {np.mean(memory_percents):.1f}%, 最大: {np.max(memory_percents):.1f}%, 最小: {np.min(memory_percents):.1f}%")
-        if temperatures:
-            print(f"GPU温度 - 平均: {np.mean(temperatures):.1f}°C, 最大: {np.max(temperatures):.1f}°C, 最小: {np.min(temperatures):.1f}°C")
-        if power_usages:
-            print(f"GPU功耗 - 平均: {np.mean(power_usages):.1f}W, 最大: {np.max(power_usages):.1f}W, 最小: {np.min(power_usages):.1f}W")
-        
-        # 性能评估
-        avg_utilization = np.mean(utilizations) if utilizations else 0
-        if avg_utilization > 80:
-            print("✓ GPU利用率优秀 (>80%)")
-        elif avg_utilization > 50:
-            print("○ GPU利用率良好 (50-80%)")
-        elif avg_utilization > 20:
-            print("⚠ GPU利用率偏低 (20-50%)")
-        else:
-            print("✗ GPU利用率过低 (<20%)")
-        
-        print("========================")
-
-# 全局变量用于存储动态学习率（将在模型分析后设置）
+# Global variables for storing dynamic learning rates (will be set after model analysis)
 _dynamic_init_lr = 0.0001
 _dynamic_max_lr = 0.001
 
 def set_warmup_lr(init_lr, max_lr):
-    """设置warmup函数的学习率参数"""
+    """Set learning rate parameters for warmup function"""
     global _dynamic_init_lr, _dynamic_max_lr
     _dynamic_init_lr = init_lr
     _dynamic_max_lr = max_lr
 
 def lr_warmup_decay(epoch, lr):
-    """学习率warmup和decay调度（使用动态设置的学习率）"""
+    """Learning rate warmup and decay scheduling (using dynamically set learning rates)"""
     warmup_epochs = 10
     init_lr = _dynamic_init_lr
     max_lr = _dynamic_max_lr
     decay_rate = 0.95
     if epoch < warmup_epochs:
-        # 线性warmup
+        # Linear warmup
         return init_lr + (max_lr - init_lr) * (epoch + 1) / warmup_epochs
     else:
-        # 衰减
+        # Decay
         return max_lr * (decay_rate ** (epoch - warmup_epochs))
 
 class TqdmProgressBar(Callback):
-    """自定义tqdm进度条Callback，显示类似PyTorch版本的进度条"""
+    """Custom tqdm progress bar Callback, displaying progress bar similar to PyTorch version"""
     
     def __init__(self, learning_schedule, num_epochs, num_steps_multiplier, train_steps_per_epoch, valid_steps=None):
         super().__init__()
@@ -283,17 +56,17 @@ class TqdmProgressBar(Callback):
         self.current_epoch = 0
         
     def on_epoch_begin(self, epoch, logs=None):
-        """在每个epoch开始时创建新的训练进度条"""
+        """Create new training progress bar at the start of each epoch"""
         self.current_epoch = epoch
-        # 计算当前是第几个mini_epoch（从1开始）
+        # Calculate which mini_epoch this is (starting from 1)
         mini_epoch_num = epoch + 1
         desc = f"Train {self.learning_schedule+1}/{self.num_epochs} epoch {mini_epoch_num}/{self.num_steps_multiplier}"
         self.train_pbar = tqdm(total=self.train_steps_per_epoch, desc=desc, leave=False, ncols=100)
         
     def on_batch_end(self, batch, logs=None):
-        """在每个batch结束时更新训练进度条"""
+        """Update training progress bar at the end of each batch"""
         if self.train_pbar is not None:
-            # 更新进度条，显示当前loss信息
+            # Update progress bar, showing current loss information
             loss_info = ""
             if logs:
                 if 'loss' in logs:
@@ -304,23 +77,23 @@ class TqdmProgressBar(Callback):
             self.train_pbar.update(1)
     
     def on_test_begin(self, logs=None):
-        """在验证开始时创建验证进度条"""
+        """Create validation progress bar at the start of validation"""
         if self.valid_steps is not None:
             self.valid_pbar = tqdm(total=self.valid_steps, desc="Valid", leave=False, ncols=100)
     
     def on_test_batch_end(self, batch, logs=None):
-        """在验证batch结束时更新验证进度条"""
+        """Update validation progress bar at the end of each validation batch"""
         if self.valid_pbar is not None:
             self.valid_pbar.update(1)
     
     def on_test_end(self, logs=None):
-        """在验证结束时关闭验证进度条"""
+        """Close validation progress bar at the end of validation"""
         if self.valid_pbar is not None:
             self.valid_pbar.close()
             self.valid_pbar = None
             
     def on_epoch_end(self, epoch, logs=None):
-        """在每个epoch结束时关闭训练进度条"""
+        """Close training progress bar at the end of each epoch"""
         if self.train_pbar is not None:
             self.train_pbar.close()
             self.train_pbar = None
@@ -329,15 +102,15 @@ def train_and_save(network_depth, num_filters_per_layer, input_window_size, num_
                    train_data_dir, valid_data_dir, test_data_dir, models_dir,
                    use_improved_initialization=False, use_improved_sampling=False, spike_rich_ratio=0.5):
 
-    # ========== GPU验证代码 - 添加在这里 ==========
+    # ========== GPU verification code - added here ==========
     import tensorflow as tf
     print("Training device check:")
     print("TensorFlow built with CUDA:", tf.test.is_built_with_cuda())
     print("GPU devices:", tf.config.list_physical_devices('GPU'))
     # ===========================================
 
-    use_multiprocessing = True  # 关闭多进程以避免内存问题
-    num_workers = 4  # 减少worker数量
+    use_multiprocessing = True  # Disable multiprocessing to avoid memory issues
+    num_workers = 4  # Reduce number of workers
 
     print('------------------------------------------------------------------')
     print('use_multiprocessing = %s, num_workers = %d' %(str(use_multiprocessing), num_workers))
@@ -356,18 +129,18 @@ def train_and_save(network_depth, num_filters_per_layer, input_window_size, num_
     num_filters_per_layer = [num_filters_per_layer] * network_depth # 64
 
     validation_fraction = 0.5
-    train_file_load = 0.2  # 0.3 # 减少文件加载比例
-    valid_file_load = 0.2  # 0.3 # 减少文件加载比例
+    train_file_load = 0.2  # 0.3 # Reduce file loading ratio
+    valid_file_load = 0.2  # 0.3 # Reduce file loading ratio
     num_steps_multiplier = 10
 
-    train_files_per_epoch = 6 # 4  # 减少训练文件数量
+    train_files_per_epoch = 6 # 4  # Reduce number of training files
     valid_files_per_epoch = 2 #max(1, int(validation_fraction * train_files_per_epoch))
 
-    # batch_size和学习率将在模型创建后根据模型规模动态设置
-    # 先设置默认值（将在模型分析后更新）
-    batch_size = 8  # 默认值，将在模型分析后调整
+    # batch_size and learning rate will be dynamically set based on model size after model creation
+    # Set default values first (will be updated after model analysis)
+    batch_size = 8  # Default value, will be adjusted after model analysis
     loss_weights_per_epoch = [[1.0, 0.02]] * num_epochs # [[1.0, 0.0200]] * num_epochs # Even higher spike weight
-    num_train_steps_per_epoch = [100] * num_epochs  # 减少训练步数
+    num_train_steps_per_epoch = [100] * num_epochs  # Reduce number of training steps
 
     # ------------------------------------------------------------------
     # define network architecture params
@@ -431,35 +204,35 @@ def train_and_save(network_depth, num_filters_per_layer, input_window_size, num_
                                                             strides_per_layer, dilation_rates_per_layer, initializer_per_layer,
                                                             use_improved_initialization=use_improved_initialization)
 
-    # ========== 分析模型规模并动态调整batch_size和学习率 ==========
-    # 快速查看模型规模（简洁版）
+    # ========== Analyze model size and dynamically adjust batch_size and learning rate ==========
+    # Quick model size overview (concise version)
     total_params, size_category, batch_range = get_model_size_info(temporal_conv_net)
-    print(f"\n快速模型信息: {size_category}, 参数量: {total_params:,}, 推荐batch_size: {batch_range}\n")
+    print(f"\nQuick model info: {size_category}, Parameters: {total_params:,}, Recommended batch_size: {batch_range}\n")
     
-    # 详细分析模型规模（详细版）
-    model_info = analyze_model_size(temporal_conv_net, verbose=False)  # 不打印详细信息，避免重复输出
+    # Detailed model size analysis (detailed version)
+    model_info = analyze_model_size(temporal_conv_net, verbose=False)  # Don't print detailed info to avoid duplicate output
     
-    # 根据模型规模动态设置batch_size和学习率
+    # Dynamically set batch_size and learning rate based on model size
     if "小模型" in size_category or "Small" in model_info['size_category']:
         batch_size = 256
-        base_lr = 0.0006  # 小模型使用较小的学习率
-        print(f"\n检测到小模型，设置 batch_size = {batch_size}, base_lr = {base_lr}")
+        base_lr = 0.0006  # Small models use smaller learning rate
+        print(f"\nDetected small model, setting batch_size = {batch_size}, base_lr = {base_lr}")
     # elif "大模型" in size_category or "Large" in model_info['size_category']:
     #     batch_size = 256
-    #     base_lr = 0.0006  # 大模型使用较大的学习率（从64到256，学习率×2）
-    #     print(f"\n检测到大模型，设置 batch_size = {batch_size}, base_lr = {base_lr}")
+    #     base_lr = 0.0006  # Large models use larger learning rate (from 64 to 256, learning rate ×2)
+    #     print(f"\nDetected large model, setting batch_size = {batch_size}, base_lr = {base_lr}")
     else:
-        # 中等模型，使用中间值
+        # Medium models, use intermediate values
         batch_size = 8
-        base_lr = 0.0001  # 中等模型使用中等学习率
-        print(f"\n检测到中等模型，设置 batch_size = {batch_size}, base_lr = {base_lr}")
+        base_lr = 0.0001  # Medium models use medium learning rate
+        print(f"\nDetected medium model, setting batch_size = {batch_size}, base_lr = {base_lr}")
     
-    # 根据batch_size设置学习率计划
+    # Set learning rate schedule based on batch_size
     batch_size_per_epoch = [batch_size] * num_epochs
-    learning_rate_per_epoch = [base_lr] * num_epochs  # 初始学习率 (0-40 epochs)
+    learning_rate_per_epoch = [base_lr] * num_epochs  # Initial learning rate (0-40 epochs)
     
-    # 训练阶段配置：(起始epoch, 学习率倍数, 损失权重)
-    # 学习率将根据base_lr动态计算
+    # Training stage configuration: (start_epoch, learning_rate_multiplier, loss_weights)
+    # Learning rate will be dynamically calculated based on base_lr
     training_stages = [
         (40, 0.3, [2.0, 0.01]),   # 学习率 = base_lr * 0.3 # [2.0, 0.005]
         (80, 0.1, [4.0, 0.01]),   # 学习率 = base_lr * 0.1 # [4.0, 0.002]   
@@ -472,14 +245,14 @@ def train_and_save(network_depth, num_filters_per_layer, input_window_size, num_
             learning_rate_per_epoch[i] = base_lr * lr_ratio
             loss_weights_per_epoch[i] = loss_weights
     
-    print(f"动态调整完成: batch_size = {batch_size}, 初始学习率 = {base_lr}")
+    print(f"Dynamic adjustment completed: batch_size = {batch_size}, initial learning rate = {base_lr}")
     print("=" * 60)
     
-    # 设置warmup函数的学习率（根据模型规模调整）
-    max_lr = base_lr * 10  # max_lr通常是init_lr的10倍
+    # Set learning rate for warmup function (adjusted based on model size)
+    max_lr = base_lr * 10  # max_lr is usually 10 times init_lr
     set_warmup_lr(base_lr, max_lr)
     
-    # 保存学习计划到字典
+    # Save learning schedule to dictionary
     learning_schedule_dict = {}
     learning_schedule_dict['train_file_load']           = train_file_load
     learning_schedule_dict['valid_file_load']           = valid_file_load
@@ -536,7 +309,7 @@ def train_and_save(network_depth, num_filters_per_layer, input_window_size, num_
         train_steps_per_epoch = len(train_data_generator)
         valid_steps_per_epoch = len(valid_data_generator)
         
-        # 优化器只初始化一次，学习率由callback动态调整
+        # Optimizer is initialized only once, learning rate is dynamically adjusted by callback
         if learning_schedule == 0:
             optimizer_to_use = Nadam(lr=learning_rate)
             temporal_conv_net.compile(optimizer=optimizer_to_use, loss=['binary_crossentropy','mse'], loss_weights=loss_weights)
@@ -549,32 +322,32 @@ def train_and_save(network_depth, num_filters_per_layer, input_window_size, num_
         print('batch_size = %d' %(batch_size))
         print('-----------------------------------------------')
         
-        # 在训练循环中添加时间监控
+        # Add time monitoring in training loop
         start_time = time.time()
         
-        # 创建GPU监控器
+        # Create GPU monitor
         gpu_monitor = GPUMonitor()
         
-        # 训练前检查GPU状态
-        print("训练前GPU状态:")
+        # Check GPU status before training
+        print("GPU status before training:")
         gpu_monitor.print_status("  ")
         
     
 
-        lr_scheduler = LearningRateScheduler(lr_warmup_decay, verbose=0)  # 不打印学习率变化，避免重复输出
-        # 创建自定义tqdm进度条Callback
+        lr_scheduler = LearningRateScheduler(lr_warmup_decay, verbose=0)  # Don't print learning rate changes to avoid duplicate output
+        # Create custom tqdm progress bar Callback
         tqdm_callback = TqdmProgressBar(learning_schedule, num_epochs, num_steps_multiplier, train_steps_per_epoch, valid_steps_per_epoch)
         history = temporal_conv_net.fit_generator(generator=train_data_generator,
                                                 epochs=num_steps_multiplier,
                                                 validation_data=valid_data_generator,
                                                 use_multiprocessing=use_multiprocessing,
                                                 workers=num_workers,
-                                                verbose=0,  # 设置为0禁用默认进度条，使用自定义tqdm进度条
+                                                verbose=0,  # Set to 0 to disable default progress bar, use custom tqdm progress bar
                                                 callbacks=[lr_scheduler, tqdm_callback])
 
         training_time = time.time() - start_time
         print(f"Training time: {training_time:.2f}s")
-        print("训练后GPU状态:")
+        print("GPU status after training:")
         gpu_monitor.print_status("  ")
         
         # store the loss values in training histogry dictionary and add some additional fields about the training schedule
@@ -584,7 +357,7 @@ def train_and_save(network_depth, num_filters_per_layer, input_window_size, num_
             training_history_dict['learning_schedule'] += [learning_schedule] * num_steps_multiplier
             training_history_dict['batch_size']        += [batch_size] * num_steps_multiplier
             training_history_dict['learning_rate']     += [learning_rate] * num_steps_multiplier
-            # training_history_dict['learning_rate']     += [optimizer_to_use.get_config()['learning_rate']] * num_steps_multiplier # 使用优化器获取当前学习率
+            # training_history_dict['learning_rate']     += [optimizer_to_use.get_config()['learning_rate']] * num_steps_multiplier # Use optimizer to get current learning rate
             training_history_dict['loss_weights']      += [loss_weights] * num_steps_multiplier
             training_history_dict['num_train_samples'] += [batch_size * train_steps_per_epoch] * num_steps_multiplier
             training_history_dict['num_train_steps']   += [train_steps_per_epoch] * num_steps_multiplier
@@ -596,7 +369,7 @@ def train_and_save(network_depth, num_filters_per_layer, input_window_size, num_
             training_history_dict['learning_schedule'] = [learning_schedule] * num_steps_multiplier
             training_history_dict['batch_size']        = [batch_size] * num_steps_multiplier
             training_history_dict['learning_rate']     = [learning_rate] * num_steps_multiplier
-            # training_history_dict['learning_rate']     = [optimizer_to_use.get_config()['learning_rate']] * num_steps_multiplier # 使用优化器获取当前学习率
+            # training_history_dict['learning_rate']     = [optimizer_to_use.get_config()['learning_rate']] * num_steps_multiplier # Use optimizer to get current learning rate
             training_history_dict['loss_weights']      = [loss_weights] * num_steps_multiplier
             training_history_dict['num_train_samples'] = [batch_size * train_steps_per_epoch] * num_steps_multiplier
             training_history_dict['num_train_steps']   = [train_steps_per_epoch] * num_steps_multiplier
@@ -645,7 +418,7 @@ def train_and_save(network_depth, num_filters_per_layer, input_window_size, num_
 def analyze_and_save(models_dir, test_data_dir, save_dir):
 
     """
-    运行完整的模型分析，包括AUC评估
+    Run complete model analysis, including AUC evaluation
     """
     print("Loading model results...")
     results = load_model_results(models_dir, test_data_dir)
@@ -655,25 +428,25 @@ def analyze_and_save(models_dir, test_data_dir, save_dir):
         return
     print(f"Found {len(results)} models to analyze.")
     
-    # 创建保存目录
+    # Create save directory
     os.makedirs(save_dir, exist_ok=True)
     
-    # 1. 打印模型总结（包括AUC）
+    # 1. Print model summary (including AUC)
     best_model = print_model_summary(results)
     
-    # 2. 绘制训练曲线
+    # 2. Plot training curves
     print("\nGenerating training curves...")
     plot_training_curves(results, save_dir)
     
-    # 3. 绘制模型比较图
+    # 3. Plot model comparison
     print("Generating model comparison plots...")
     plot_model_comparison(results, save_dir)
     
-    # 4. 分析训练稳定性
+    # 4. Analyze training stability
     print("Analyzing training stability...")
     analyze_training_stability(results, save_dir)
     
-    # 5. AUC分析
+    # 5. AUC analysis
     print("Analyzing AUC metrics...")
     plot_auc_analysis(results, save_dir)
     
@@ -684,12 +457,12 @@ def analyze_and_save(models_dir, test_data_dir, save_dir):
 
 def main():
 
-    # ========== GPU配置代码 - 添加在这里 ==========
+    # ========== GPU configuration code - added here ==========
     
-    # 检测GPU
+    # Detect GPU
     print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
 
-    # 配置GPU内存自增长，避免显存不足
+    # Configure GPU memory growth to avoid out of memory
     gpus = tf.config.list_physical_devices('GPU')
     if gpus:
         try:
@@ -699,73 +472,73 @@ def main():
         except RuntimeError as e:
             print(e)
 
-    # 可选：指定使用特定GPU（如果有多块GPU）
-    # os.environ["CUDA_VISIBLE_DEVICES"] = "0"  # 只使用第0号GPU
+    # Optional: specify which GPU to use (if multiple GPUs available)
+    # os.environ["CUDA_VISIBLE_DEVICES"] = "0"  # Only use GPU 0
     # ===========================================
     
-    # GPU状态诊断
-    print("\n=== GPU状态诊断 ===")
-    print(f"TensorFlow版本: {tf.__version__}")
-    print(f"CUDA可用: {tf.test.is_built_with_cuda()}")
-    print(f"GPU设备数量: {len(tf.config.list_physical_devices('GPU'))}")
+    # GPU status diagnosis
+    print("\n=== GPU Status Diagnosis ===")
+    print(f"TensorFlow version: {tf.__version__}")
+    print(f"CUDA available: {tf.test.is_built_with_cuda()}")
+    print(f"Number of GPU devices: {len(tf.config.list_physical_devices('GPU'))}")
     
-    # 使用GPU监控类
+    # Use GPU monitoring class
     gpu_monitor = GPUMonitor()
     if gpu_monitor.available:
-        print("GPU监控器初始化成功")
+        print("GPU monitor initialized successfully")
         gpu_monitor.print_status("  ")
     else:
-        print("GPU监控不可用，请安装: pip install nvidia-ml-py")
+        print("GPU monitoring not available, please install: pip install nvidia-ml-py")
     print("==================\n")
 
-    # 1. 定义超参数网格
+    # 1. Define hyperparameter grid
     network_depth_list = [7]
-    num_filters_per_layer_list = [256]  # 其它参数可固定或自行调整
-    input_window_size_list = [400]  # 这里遍历不同的input_window_size
+    num_filters_per_layer_list = [256]  # Other parameters can be fixed or adjusted
+    input_window_size_list = [400]  # Traverse different input_window_size here
 
     num_epochs = 200
 
-    # 2. 主控循环
+    # 2. Main control loop
 
-    # 配置改进选项
-    use_improved_initialization = False   # 设置为True启用改进的初始化策略
-    use_improved_sampling = True       # 设置为True启用改进的数据采样策略
-    spike_rich_ratio = 0.6              # 60%的样本包含spike
+    # Configure improvement options
+    use_improved_initialization = False   # Set to True to enable improved initialization strategy
+    use_improved_sampling = True       # Set to True to enable improved data sampling strategy
+    spike_rich_ratio = 0.6              # 60% of samples contain spikes
     
-    print(f"\n=== 改进配置 ===")
-    print(f"改进初始化策略: {'启用' if use_improved_initialization else '禁用'}")
-    print(f"改进数据采样: {'启用' if use_improved_sampling else '禁用'}")
+    print(f"\n=== Improvement Configuration ===")
+    print(f"Improved initialization strategy: {'Enabled' if use_improved_initialization else 'Disabled'}")
+    print(f"Improved data sampling: {'Enabled' if use_improved_sampling else 'Disabled'}")
     if use_improved_sampling:
-        print(f"Spike-rich样本比例: {spike_rich_ratio * 100:.0f}%")
+        print(f"Spike-rich sample ratio: {spike_rich_ratio * 100:.0f}%")
     print(f"================\n")
 
     def build_analysis_suffix(base_path, model_suffix):
         """
-        动态构建analysis suffix
-        从base path中提取'InOut'后的部分，从model suffix中提取下划线后的部分
+        Dynamically build analysis suffix
+        Extract part after 'InOut' from base path, extract part after underscore from model suffix
         """
-        # 从base path中提取'InOut'后的部分
+        # Extract part after 'InOut' from base path
         if 'InOut' in base_path:
-            inout_part = base_path.split('InOut')[-1]  # 获取'InOut'后的部分
-            # 如果结果以下划线开头，去掉开头的下划线
+            inout_part = base_path.split('InOut')[-1]  # Get part after 'InOut'
+            # If result starts with underscore, remove leading underscore
             if inout_part.startswith('_'):
                 inout_part = inout_part[1:]
         else:
-            inout_part = 'original' # base_path.split('/')[-1]  # 如果没有'InOut'，取最后一部分
+            inout_part = 'original' # base_path.split('/')[-1]  # If no 'InOut', take last part
         
-        # 从model suffix中提取下划线后的部分
+        # Extract part after underscore from model suffix
         if '_' in model_suffix:
-            model_part = model_suffix.split('_', 1)[1]  # 获取第一个下划线后的部分
+            model_part = model_suffix.split('_', 1)[1]  # Get part after first underscore
         else:
             model_part = model_suffix
         
-        # 组合成analysis suffix
+        # Combine into analysis suffix
         analysis_suffix = f"{inout_part}_{model_part}"
         return analysis_suffix
 
     for network_depth, num_filters_per_layer, input_window_size in product(network_depth_list, num_filters_per_layer_list, input_window_size_list):
 
-        # 基础配置
+        # Basic configuration
         test_suffix = '' #'_SJC_funcgroup2_var2'
 
         base_path = '/G/results/aim2_sjc/Models_TCN/Single_Neuron_InOut' + test_suffix
@@ -776,15 +549,15 @@ def main():
         # data_suffix = 'IF_model' #'L5PC_NMDA'
         # model_suffix = 'IF_model_tensorflow' #'NMDA_tensorflow'
         
-        # 动态构建analysis suffix
+        # Dynamically build analysis suffix
         analysis_suffix = build_analysis_suffix(base_path, model_suffix)
     
-        # 数据目录
+        # Data directories
         train_data_dir = f'{base_path}/data/{data_suffix}_train/'
         valid_data_dir = f'{base_path}/data/{data_suffix}_valid/'
         test_data_dir = f'{base_path}/data/{data_suffix}_test/'
         
-        # 模型和分析目录
+        # Model and analysis directories
         model_dir = f'{base_path}/models/{model_suffix}/depth_{network_depth}_filters_{num_filters_per_layer}_window_{input_window_size}/'
         analysis_dir = f'./results/3_model_analysis_plots/{analysis_suffix}/depth_{network_depth}_filters_{num_filters_per_layer}_window_{input_window_size}/'
         
@@ -792,12 +565,12 @@ def main():
         os.makedirs(analysis_dir, exist_ok=True)
 
         print(f"\n==============================")
-        print(f"开始训练: network_depth={network_depth}, num_filters_per_layer={num_filters_per_layer}, input_window_size={input_window_size}")
-        print(f"模型保存目录: {model_dir}")
-        print(f"分析结果目录: {analysis_dir}")
+        print(f"Starting training: network_depth={network_depth}, num_filters_per_layer={num_filters_per_layer}, input_window_size={input_window_size}")
+        print(f"Model save directory: {model_dir}")
+        print(f"Analysis results directory: {analysis_dir}")
         print(f"==============================\n")
         
-        # 3. 训练模型
+        # 3. Train model
         train_and_save(
             network_depth=network_depth,
             num_filters_per_layer=num_filters_per_layer,
@@ -820,14 +593,14 @@ def main():
         #     models_dir=model_dir
         # )
 
-        # 4. 分析模型
+        # 4. Analyze model
         analyze_and_save(
             models_dir=model_dir,
             test_data_dir=test_data_dir,
             save_dir=analysis_dir
         )
 
-    print("\n所有超参数组合训练与分析已完成！") 
+    print("\nAll hyperparameter combination training and analysis completed!") 
 
 if __name__ == "__main__":
     main()
