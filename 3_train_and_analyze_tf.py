@@ -3,6 +3,7 @@ import glob
 import time
 import os
 import pickle
+import argparse
 from datetime import datetime  
 from itertools import product
 # from fit_CNN_pytorch import train_and_save_pytorch
@@ -456,6 +457,48 @@ def analyze_and_save(models_dir, test_data_dir, save_dir):
         print(f"Best ROC AUC: {best_model['auc_metrics']['roc_auc_spike']:.4f}")
 
 def main():
+    # ========== Parse command line arguments ==========
+    parser = argparse.ArgumentParser(description='Train and analyze TCN model (TensorFlow version)')
+    
+    # Hyperparameter grid arguments
+    parser.add_argument('--network_depth', type=int, nargs='+', default=[7],
+                        help='Network depth(s) to train (default: [7])')
+    parser.add_argument('--num_filters_per_layer', type=int, nargs='+', default=[256],
+                        help='Number of filters per layer (default: [256])')
+    parser.add_argument('--input_window_size', type=int, nargs='+', default=[400],
+                        help='Input window size(s) in ms (default: [400])')
+    parser.add_argument('--num_epochs', type=int, default=200,
+                        help='Number of training epochs (default: 200)')
+    
+    # Path and model configuration arguments
+    parser.add_argument('--test_suffix', type=str, default='',
+                        help='Test suffix to append to base path (default: empty string)')
+    parser.add_argument('--base_subpath', type=str, default='Single_Neuron_InOut',
+                        help='Base subpath for data and model directories (default: Single_Neuron_InOut)')
+    parser.add_argument('--data_suffix', type=str, default='L5PC_NMDA',
+                        help='Data suffix for train/valid/test directories (default: L5PC_NMDA)')
+    parser.add_argument('--model_suffix', type=str, default='NMDA_tensorflow_ratio0.6',
+                        help='Model suffix for model directory (default: NMDA_tensorflow_ratio0.6)')
+    
+    args = parser.parse_args()
+    
+    # ========== Configuration: All variables defined together ==========
+    # Hyperparameter grid
+    network_depth_list = args.network_depth
+    num_filters_per_layer_list = args.num_filters_per_layer
+    input_window_size_list = args.input_window_size
+    num_epochs = args.num_epochs
+    
+    # Path configuration
+    test_suffix = args.test_suffix
+    base_path = f'/G/results/aim2_sjc/Models_TCN/{args.base_subpath}{test_suffix}'
+    data_suffix = args.data_suffix
+    model_suffix = args.model_suffix
+    
+    # Configure improvement options
+    use_improved_initialization = False   # Set to True to enable improved initialization strategy
+    use_improved_sampling = True       # Set to True to enable improved data sampling strategy
+    spike_rich_ratio = 0.6              # 60% of samples contain spikes
 
     # ========== GPU configuration code - added here ==========
     
@@ -490,20 +533,6 @@ def main():
     else:
         print("GPU monitoring not available, please install: pip install nvidia-ml-py")
     print("==================\n")
-
-    # 1. Define hyperparameter grid
-    network_depth_list = [7]
-    num_filters_per_layer_list = [256]  # Other parameters can be fixed or adjusted
-    input_window_size_list = [400]  # Traverse different input_window_size here
-
-    num_epochs = 200
-
-    # 2. Main control loop
-
-    # Configure improvement options
-    use_improved_initialization = False   # Set to True to enable improved initialization strategy
-    use_improved_sampling = True       # Set to True to enable improved data sampling strategy
-    spike_rich_ratio = 0.6              # 60% of samples contain spikes
     
     print(f"\n=== Improvement Configuration ===")
     print(f"Improved initialization strategy: {'Enabled' if use_improved_initialization else 'Disabled'}")
@@ -536,14 +565,8 @@ def main():
         analysis_suffix = f"{inout_part}_{model_part}"
         return analysis_suffix
 
+    # 2. Main control loop
     for network_depth, num_filters_per_layer, input_window_size in product(network_depth_list, num_filters_per_layer_list, input_window_size_list):
-
-        # Basic configuration
-        test_suffix = '' #'_SJC_funcgroup2_var2'
-
-        base_path = '/G/results/aim2_sjc/Models_TCN/Single_Neuron_InOut' + test_suffix
-        data_suffix = 'L5PC_NMDA'
-        model_suffix = 'NMDA_tensorflow_ratio0.6'
             
         # base_path = '/G/results/aim2_sjc/Models_TCN/IF_model_InOut' + test_suffix
         # data_suffix = 'IF_model' #'L5PC_NMDA'
