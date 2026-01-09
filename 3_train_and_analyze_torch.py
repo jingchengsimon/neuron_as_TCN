@@ -160,7 +160,7 @@ def train_and_save(network_depth, num_filters_per_layer, input_window_size, num_
     # ========== Dynamically adjust batch_size and learning rate based on model size ==========
     # Determine model size and set batch_size
     if "小模型" in size_category or "Small" in model_info['size_category']:
-        batch_size = 256
+        batch_size = 64 
         base_lr = 0.0006  # Small models use smaller learning rate
         print(f"\nDetected small model, setting batch_size = {batch_size}, base_lr = {base_lr}")
     # elif "大模型" in size_category or "Large" in model_info['size_category']:

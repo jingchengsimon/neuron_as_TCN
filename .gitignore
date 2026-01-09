@@ -43,6 +43,9 @@ Models_TCN/
 Results/
 Data/
 
+# IF model simulations
+IF_model_simulations/
+
 # History files
 .history/
 
