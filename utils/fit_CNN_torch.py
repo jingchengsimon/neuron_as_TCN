@@ -398,7 +398,17 @@ class SimulationDataGenerator:
                 if t in available_times:
                     available_times.remove(t)
         
-        if len(available_times) >= num_random:
+        if len(available_times) == 0:
+            # 极端情况：所有时间点都被 spike-rich 窗覆盖，或者时间范围本身为空
+            # 回退到完整时间范围 [sampling_end_time, sim_duration_ms) 上随机采样，允许重复
+            fallback_times = list(range(sampling_end_time, self.sim_duration_ms))
+            if len(fallback_times) == 0:
+                # 如果连 fallback 范围都为空，则退化为 [0, self.sim_duration_ms)
+                fallback_times = list(range(0, self.sim_duration_ms))
+            selected_end_time_inds_random = np.random.choice(fallback_times, size=num_random, replace=True)
+            selected_sim_inds_random = np.random.choice(range(self.num_simulations_per_file), size=num_random, replace=True)
+            selected_wins_random = list(zip(selected_sim_inds_random, selected_end_time_inds_random))
+        elif len(available_times) >= num_random:
             selected_end_time_inds_random = np.random.choice(available_times, size=num_random, replace=False)
             selected_sim_inds_random = np.random.choice(range(self.num_simulations_per_file), size=num_random, replace=True)
             selected_wins_random = list(zip(selected_sim_inds_random, selected_end_time_inds_random))
