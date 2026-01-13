@@ -29,8 +29,21 @@ def dict2bin(row_inds_spike_times_map, num_segments, sim_duration_ms, syn_type, 
 
     bin_spikes_matrix = np.zeros((num_segments, sim_duration_ms), dtype='bool')            
     for row_ind in row_inds_spike_times_map.keys():
+        # Ensure row_ind is within valid range
+        if row_ind < 0 or row_ind >= num_segments:
+            continue
         for spike_time in row_inds_spike_times_map[row_ind]:
-            bin_spikes_matrix[row_ind,spike_time] = 1.0
+            # Ensure spike_time is within valid range [0, sim_duration_ms-1]
+            # Handle cases where spike_time might be 1-based or equal to sim_duration_ms
+            if spike_time < 0:
+                continue
+            elif spike_time >= sim_duration_ms:
+                # If spike_time equals sim_duration_ms, it's likely 1-based indexing
+                # Convert to 0-based by subtracting 1, but ensure it's still valid
+                spike_time = spike_time - 1
+                if spike_time < 0 or spike_time >= sim_duration_ms:
+                    continue
+            bin_spikes_matrix[row_ind, spike_time] = 1.0
     
     return bin_spikes_matrix
 
