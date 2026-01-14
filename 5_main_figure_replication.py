@@ -712,4 +712,7 @@ if __name__ == "__main__":
     print(f"Models directory: {models_dir}")
     print(f"==================\n")
     
-    main(models_dir, data_dir, args.data_suffix, args.model_size, args.desired_fpr)
+    # Extract model_string from data_suffix (e.g., 'NMDA' from 'NMDA_torch_ratio0.6')
+    model_string = args.data_suffix.split('_')[0] if '_' in args.data_suffix else args.data_suffix
+    
+    main(models_dir, data_dir, model_string, args.model_size, args.desired_fpr)
