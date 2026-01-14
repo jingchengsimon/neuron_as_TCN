@@ -2,6 +2,7 @@ import os
 import glob
 import time
 import pickle
+import argparse
 import numpy as np
 import matplotlib
 import torch
@@ -19,8 +20,7 @@ matplotlib.rcParams['svg.fonttype'] = 'none'
 def configure_pytorch_resources(
     max_cpu_threads=None,
     gpu_memory_fraction=None,
-    gpu_memory_limit_mb=None,
-):
+    gpu_memory_limit_mb=None,):
     """
     配置PyTorch使用的CPU线程数和GPU内存
     
@@ -686,16 +686,31 @@ def main(models_dir, data_dir, model_string='NMDA', model_size='large', desired_
 
         
 if __name__ == "__main__":
-    data_suffix = 'NMDA'
-
+    # ========== Parse command line arguments ==========
+    parser = argparse.ArgumentParser(description='Main figure replication (PyTorch version)')
+    
+    # Path and model configuration arguments
+    parser.add_argument('--data_suffix', type=str, default='NMDA',
+                        help='Data suffix for train/valid/test directories (default: NMDA)')
+    parser.add_argument('--model_suffix', type=str, default='NMDA_torch_ratio0.6',
+                        help='Model suffix for model directory (default: NMDA_torch_ratio0.6)')
+    parser.add_argument('--desired_fpr', type=float, default=0.002,
+                        help='Desired false positive rate for threshold determination (default: 0.002)')
+    
+    args = parser.parse_args()
+    
+    # ========== Configuration: Build paths from arguments ==========
     base_path = '/G/results/aim2_sjc/Models_TCN/Single_Neuron_InOut/'
-    models_dir = base_path + f'models/{data_suffix}_torch_ratio0.6/'
+    models_dir = base_path + f'models/{args.model_suffix}/'
     data_dir = base_path + 'data/'
-
-    # models_dir = '/G/results/aim2_sjc/Models_TCN/IF_model_InOut/models/IF_model_torch/'
-    # data_dir = '/G/results/aim2_sjc/Models_TCN/IF_model_InOut/data/'
     
-    desired_fpr = 0.002
+    print(f"\n=== Configuration ===")
+    print(f"Data suffix: {args.data_suffix}")
+    print(f"Model suffix: {args.model_suffix}")
+    print(f"Desired FPR: {args.desired_fpr}")
+    print(f"Base path: {base_path}")
+    print(f"Models directory: {models_dir}")
+    print(f"Data directory: {data_dir}")
+    print(f"==================\n")
     
-    
-    main(models_dir, data_dir, data_suffix, 'large', desired_fpr)
+    main(models_dir, data_dir, args.data_suffix, 'large', args.desired_fpr)
