@@ -690,27 +690,26 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Main figure replication (PyTorch version)')
     
     # Path and model configuration arguments
+    parser.add_argument('--base_subpath', type=str, default='Single_Neuron_InOut',
+                        help='Base subpath for data and model directories (default: Single_Neuron_InOut)')
     parser.add_argument('--data_suffix', type=str, default='NMDA',
-                        help='Data suffix for train/valid/test directories (default: NMDA)')
-    parser.add_argument('--model_suffix', type=str, default='NMDA_torch_ratio0.6',
-                        help='Model suffix for model directory (default: NMDA_torch_ratio0.6)')
+                        help='Data suffix for building models directory (default: NMDA)')
     parser.add_argument('--desired_fpr', type=float, default=0.002,
                         help='Desired false positive rate for threshold determination (default: 0.002)')
+    parser.add_argument('--model_size', type=str, default='large',
+                        help='Model size category (default: large)')
     
     args = parser.parse_args()
     
     # ========== Configuration: Build paths from arguments ==========
-    base_path = '/G/results/aim2_sjc/Models_TCN/Single_Neuron_InOut/'
-    models_dir = base_path + f'models/{args.model_suffix}/'
+    base_path = f'/G/results/aim2_sjc/Models_TCN/{args.base_subpath}/'
+    models_dir = base_path + f'models/{args.data_suffix}_torch_ratio0.6/'
     data_dir = base_path + 'data/'
     
     print(f"\n=== Configuration ===")
-    print(f"Data suffix: {args.data_suffix}")
-    print(f"Model suffix: {args.model_suffix}")
     print(f"Desired FPR: {args.desired_fpr}")
-    print(f"Base path: {base_path}")
+    print(f"Model size: {args.model_size}")
     print(f"Models directory: {models_dir}")
-    print(f"Data directory: {data_dir}")
     print(f"==================\n")
     
-    main(models_dir, data_dir, args.data_suffix, 'large', args.desired_fpr)
+    main(models_dir, data_dir, args.data_suffix, args.model_size, args.desired_fpr)
