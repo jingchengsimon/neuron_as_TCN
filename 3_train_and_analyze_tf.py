@@ -19,6 +19,13 @@ from keras.optimizers import Nadam
 from keras.callbacks import LearningRateScheduler, Callback
 from tqdm import tqdm
 
+# Import build_analysis_suffix from torch version to avoid code duplication
+import importlib.util
+spec = importlib.util.spec_from_file_location("train_torch", "3_train_and_analyze_torch.py")
+train_torch = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(train_torch)
+build_analysis_suffix = train_torch.build_analysis_suffix
+
 # Global variables for storing dynamic learning rates (will be set after model analysis)
 _dynamic_init_lr = 0.0001
 _dynamic_max_lr = 0.001
@@ -550,39 +557,6 @@ def main():
         print(f"Spike-rich sample ratio: {spike_rich_ratio * 100:.0f}%")
     print(f"================\n")
 
-    def build_analysis_suffix(base_path, model_name):
-        """
-        Dynamically build analysis suffix
-        Extract part after 'InOut' from base path, extract part after underscore from model name
-        """
-        # Extract part after 'InOut' from base path
-        if 'InOut' in base_path:
-            inout_part = base_path.split('InOut')[-1]  # Get part after 'InOut'
-            # If result starts with underscore, remove leading underscore
-            if inout_part.startswith('_'):
-                inout_part = inout_part[1:]
-        else:
-            inout_part = 'original' # base_path.split('/')[-1]  # If no 'InOut', take last part
-        
-        # Extract part after underscore from model name
-        if '_' in model_name:
-            if model_name.startswith('IF_') or model_name.startswith('reduce_'):
-                # For IF and reduce models, get the third part (e.g., "torch" from "reduce_model_torch")
-                parts = model_name.split('_')
-                if len(parts) >= 3:
-                    model_part = parts[2]  # Get the third part
-                else:
-                    model_part = model_name.split('_', 1)[1]  # Fallback to second part
-            else:
-                # For single neuron, get the second part (e.g., "torch_ratio0.6_2" from "NMDA_torch_ratio0.6_2")
-                model_part = model_name.split('_', 1)[1]  # Get part after first underscore
-        else:
-            model_part = model_name
-        
-        # Combine into analysis suffix
-        analysis_suffix = f"{inout_part}_{model_part}"
-        return analysis_suffix
-
     # 2. Main control loop
     for network_depth, num_filters_per_layer, input_window_size in product(network_depth_list, num_filters_per_layer_list, input_window_size_list):
         # Dynamically build analysis suffix
@@ -591,7 +565,7 @@ def main():
         # Add sampling configuration abbreviations to paths
         sampling_suffix = ''
         if use_improved_sampling:
-            sampling_suffix = f'_ratio{spike_rich_ratio:.1f}'.replace('.', '')
+            sampling_suffix = f'_ratio{spike_rich_ratio:.1f}'
         model_name_with_sampling = f'{model_name}{sampling_suffix}'
         analysis_suffix_with_sampling = f'{analysis_suffix}{sampling_suffix}'
     

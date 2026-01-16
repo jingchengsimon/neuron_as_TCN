@@ -480,6 +480,49 @@ def train_and_save(network_depth, num_filters_per_layer, input_window_size, num_
             print('No model saved for epoch %d/%d' %(learning_schedule +1, num_epochs))
             print('-----------------------------------------------------------------------------------------')
 
+def build_analysis_suffix(base_path, model_name):
+    """
+    Dynamically build analysis suffix
+    Extract part from base path based on whether it starts with 'Single':
+    - For 'Single' prefix: extract part after 'InOut'
+    - For other cases: extract part before 'InOut'
+    """
+    # Extract part from base path
+    if 'InOut' in base_path:
+        if base_path.startswith('Single') or '/Single' in base_path:
+            # For Single prefix, get part after 'InOut'
+            inout_part = base_path.split('InOut')[-1]  # Get part after 'InOut'
+            # If result starts with underscore, remove leading underscore
+            if inout_part.startswith('_'):
+                inout_part = inout_part[1:]
+        else:
+            # For other cases (e.g., reduce_model_InOut), get part before 'InOut'
+            inout_part = base_path.split('InOut')[0]  # Get part before 'InOut'
+            # Extract the last component (e.g., 'reduce_model' from '/path/to/reduce_model_InOut')
+            if '/' in inout_part:
+                inout_part = inout_part.split('/')[-1]
+    else:
+        inout_part = 'original' # base_path.split('/')[-1]  # If no 'InOut', take last part
+    
+    # Extract part after underscore from model name
+    if '_' in model_name:
+        if model_name.startswith('IF_') or model_name.startswith('reduce_'):
+            # For IF and reduce models, get the third part (e.g., "torch" from "reduce_model_torch")
+            parts = model_name.split('_')
+            if len(parts) >= 3:
+                model_part = parts[2]  # Get the third part
+            else:
+                model_part = model_name.split('_', 1)[1]  # Fallback to second part
+        else:
+            # For single neuron, get the second part (e.g., "torch_ratio0.6_2" from "NMDA_torch_ratio0.6_2")
+            model_part = model_name.split('_', 1)[1]  # Get part after first underscore
+    else:
+        model_part = model_name
+    
+    # Combine into analysis suffix
+    analysis_suffix = f"{inout_part}_{model_part}"
+    return analysis_suffix
+
 def analyze_and_save(models_dir, test_data_dir, save_dir):
 
     """
@@ -590,46 +633,13 @@ def main():
         print(f"Spike-rich sample ratio: {spike_rich_ratio * 100:.0f}%")
     print(f"================\n")
 
-    def build_analysis_suffix(base_path, model_name):
-        """
-        Dynamically build analysis suffix
-        Extract part after 'InOut' from base path, extract part after underscore from model name
-        """
-        # Extract part after 'InOut' from base path
-        if 'InOut' in base_path:
-            inout_part = base_path.split('InOut')[-1]  # Get part after 'InOut'
-            # If result starts with underscore, remove leading underscore
-            if inout_part.startswith('_'):
-                inout_part = inout_part[1:]
-        else:
-            inout_part = 'original' # base_path.split('/')[-1]  # If no 'InOut', take last part
-        
-        # Extract part after underscore from model name
-        if '_' in model_name:
-            if model_name.startswith('IF_') or model_name.startswith('reduce_'):
-                # For IF and reduce models, get the third part (e.g., "torch" from "reduce_model_torch")
-                parts = model_name.split('_')
-                if len(parts) >= 3:
-                    model_part = parts[2]  # Get the third part
-                else:
-                    model_part = model_name.split('_', 1)[1]  # Fallback to second part
-            else:
-                # For single neuron, get the second part (e.g., "torch_ratio0.6_2" from "NMDA_torch_ratio0.6_2")
-                model_part = model_name.split('_', 1)[1]  # Get part after first underscore
-        else:
-            model_part = model_name
-        
-        # Combine into analysis suffix
-        analysis_suffix = f"{inout_part}_{model_part}"
-        return analysis_suffix
-
     # Dynamically build analysis suffix
     analysis_suffix = build_analysis_suffix(test_suffix, model_name)
     
     # Add sampling configuration abbreviations to paths
     sampling_suffix = ''
     if use_improved_sampling:
-        sampling_suffix = f'_ratio{spike_rich_ratio:.1f}'.replace('.', '')
+        sampling_suffix = f'_ratio{spike_rich_ratio:.1f}'
     model_name_with_sampling = f'{model_name}{sampling_suffix}'
     analysis_suffix_with_sampling = f'{analysis_suffix}{sampling_suffix}'
 
