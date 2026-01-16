@@ -208,7 +208,7 @@ class MainFigureReplication:
         else:
             return None
     
-    def _get_model_config(self, model_type, model_string='NMDA', model_size='large', input_channels=None):
+    def _get_model_config(self, model_type, model_string='NMDA', model_size='large', input_channels=None, full_model_dir=None):
         """
         Get model configuration based on model type.
         
@@ -217,6 +217,7 @@ class MainFigureReplication:
             model_string: Model string for Single_Neuron ('NMDA', 'AMPA')
             model_size: Model size for Single_Neuron ('small', 'large')
             input_channels: Input channels for reduce_model (optional)
+            full_model_dir: Full model directory path (with suffix) for extracting inout_suffix and strategy_part (optional)
         
         Returns:
             dict: Configuration dictionary with keys:
@@ -224,6 +225,7 @@ class MainFigureReplication:
                 - test_data_dir_suffix: Suffix for test data directory
                 - valid_data_dir_suffix: Suffix for validation data directory
                 - inout_suffix: Suffix for dataset identifier
+                - strategy_part: Strategy part for dataset identifier (if full_model_dir provided)
                 - num_segments_exc: Number of excitatory segments (if applicable)
                 - num_segments_inh: Number of inhibitory segments (if applicable)
         """
@@ -255,24 +257,42 @@ class MainFigureReplication:
                 config['num_segments_inh'] = None
                 
         elif model_type == 'Single_Neuron':
-            # Set data directory suffixes
-            config['test_data_dir_suffix'] = f'L5PC_{model_string}_test/'
-            config['valid_data_dir_suffix'] = f'L5PC_{model_string}_valid/'
-            config['inout_suffix'] = 'original'  # Will be overridden by SJC check if needed
+            # Validate model_string and set configuration based on synapse type (NMDA or AMPA)
+            if model_string not in ['NMDA', 'AMPA']:
+                raise ValueError(f"Unsupported model_string '{model_string}' for Single_Neuron model. Supported: 'NMDA', 'AMPA'")
             
-            # Set model directory suffix based on model_string and model_size
+            # Set model directory suffix and data directory suffixes based on model_string
             if model_string == 'NMDA':
                 config['model_dir_suffix'] = ('depth_3_filters_256_window_400/' if model_size == 'small' 
                                              else 'depth_7_filters_256_window_400/')
-            elif model_string == 'AMPA':
+            else:  # model_string == 'AMPA'
                 config['model_dir_suffix'] = ('depth_1_filters_128_window_400/' if model_size == 'small' 
                                              else 'depth_7_filters_256_window_400/')
-            else:
-                raise ValueError(f"Unsupported model_string '{model_string}' for Single_Neuron model. Supported: 'NMDA', 'AMPA'")
+            
+            config['test_data_dir_suffix'] = f'L5PC_{model_string}_test/'
+            config['valid_data_dir_suffix'] = f'L5PC_{model_string}_valid/'
+            config['inout_suffix'] = 'original'  # Default, will be overridden by SJC check if needed
             
             # Set num_segments (default for Single_Neuron)
             config['num_segments_exc'] = 639
             config['num_segments_inh'] = 639  # Will be overridden by SJC check if needed
+            
+            # Process full_model_dir for inout_suffix and strategy_part if provided
+            if full_model_dir is not None:
+                path_parts = full_model_dir.split('/')
+                
+                # Check for SJC variants and update inout_suffix based on synapse type
+                for part in path_parts:
+                    if 'SJC' in part:
+                        # Use the same synapse type logic: if AMPA in path, use AMPA; otherwise NMDA
+                        config['inout_suffix'] = 'SJC_AMPA' if 'AMPA' in part else 'SJC_NMDA'
+                        break
+                
+                # Extract strategy part
+                strategy_part = path_parts[-3] if len(path_parts) >= 3 else path_parts[-1]
+                if '_' in strategy_part:
+                    strategy_part = strategy_part.split('_', 1)[1]
+                config['strategy_part'] = strategy_part
             
         else:
             raise ValueError(f"Unsupported model_type '{model_type}'. Supported: 'IF_model', 'reduce_model', 'Single_Neuron'")
@@ -286,14 +306,19 @@ class MainFigureReplication:
         if model_type is None:
             raise ValueError(f"Unable to determine model directory structure. models_dir must contain one of: 'IF_model', 'reduce_model', 'Single_Neuron'. Got: {models_dir}")
         
-        config = self._get_model_config(model_type, model_string, model_size)
+        # Get initial configuration to build full_model_dir
+        initial_config = self._get_model_config(model_type, model_string, model_size)
+        full_model_dir = models_dir + initial_config['model_dir_suffix']
         
-        # Build paths from configuration
-        model_dir = models_dir + config['model_dir_suffix']
+        # Get full configuration with full_model_dir for dataset identifier
+        config = self._get_model_config(model_type, model_string, model_size, full_model_dir=full_model_dir)
+        
         test_data_dir = data_dir + config['test_data_dir_suffix']
         valid_data_dir = data_dir + config['valid_data_dir_suffix']
+        
         # Build output directory
-        dataset_identifier = self._build_dataset_identifier(model_dir, model_size, desired_fpr)
+        base_identifier = f"{config['inout_suffix']}_{config['strategy_part']}"
+        dataset_identifier = f'{base_identifier}/{model_size}/fpr{desired_fpr}'
         output_dir = f"./results/5_main_figure_replication/{dataset_identifier}"
         os.makedirs(output_dir, exist_ok=True)
         # Find test files
@@ -305,7 +330,7 @@ class MainFigureReplication:
         if not valid_files:
             valid_files = sorted(glob.glob(os.path.join(valid_data_dir, '*.p')))
         # Find best model
-        model_filename, model_metadata_filename = find_best_model(model_dir)
+        model_filename, model_metadata_filename = find_best_model(full_model_dir)
         print(f'Model file: {model_filename.split("/")[-1]}')
         print(f'Metadata file: {model_metadata_filename.split("/")[-1]}')
         print(f'Test files count: {len(test_files)}')
@@ -556,36 +581,6 @@ class MainFigureReplication:
                 per_sample_optimal_metrics=per_sample_optimal_metrics
             )
 
-    def _build_dataset_identifier(self, model_dir, model_size, desired_fpr):
-        """Build dataset identifier"""
-        path_parts = model_dir.split('/')
-        # Extract InOut suffix using unified model type detection
-        model_type = self._detect_model_type(model_dir)
-        if model_type:
-            config = self._get_model_config(model_type)
-            inout_suffix = config['inout_suffix']
-        else:
-            inout_suffix = 'original'
-        
-        # Check for SJC variants (overrides default for Single_Neuron)
-        if model_type == 'Single_Neuron' or model_type is None:
-            for part in path_parts:
-                if 'SJC' in part:
-                    if 'AMPA' in part:
-                        inout_suffix = 'SJC_AMPA'
-                    else:
-                        inout_suffix = 'SJC_NMDA'
-                    break
-
-        # Extract strategy part
-        strategy_part = path_parts[-3] if len(path_parts) >= 3 else path_parts[-1]
-        if '_' in strategy_part:
-            strategy_part = strategy_part.split('_', 1)[1]
-        base_identifier = f"{inout_suffix}_{strategy_part}"
-
-        return f'{base_identifier}/{model_size}/fpr{desired_fpr}'
-
-    
     def _reconstruct_model_from_architecture(self, architecture_dict, device, base_path="", input_channels=None):
         """Reconstruct PyTorch model from architecture dictionary using TCNModel from fit_CNN_torch"""
         num_filters_per_layer = architecture_dict.get('num_filters_per_layer', [256] * 7)
