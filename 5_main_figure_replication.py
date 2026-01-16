@@ -190,33 +190,108 @@ class MainFigureReplication:
     """Encapsulates main-figure replication utilities"""
     def __init__(self):
         self._device_selector = DeviceSelector()
+    
+    def _detect_model_type(self, path):
+        """
+        Detect model type from path string.
+        
+        Returns:
+            str: Model type identifier ('IF_model', 'reduce_model', 'Single_Neuron', or None)
+        """
+        path_lower = path.lower()
+        if 'if_model' in path_lower:
+            return 'IF_model'
+        elif 'reduce_model' in path_lower:
+            return 'reduce_model'
+        elif 'single_neuron' in path_lower:
+            return 'Single_Neuron'
+        else:
+            return None
+    
+    def _get_model_config(self, model_type, model_string='NMDA', model_size='large', input_channels=None):
+        """
+        Get model configuration based on model type.
+        
+        Args:
+            model_type: Model type identifier ('IF_model', 'reduce_model', 'Single_Neuron')
+            model_string: Model string for Single_Neuron ('NMDA', 'AMPA')
+            model_size: Model size for Single_Neuron ('small', 'large')
+            input_channels: Input channels for reduce_model (optional)
+        
+        Returns:
+            dict: Configuration dictionary with keys:
+                - model_dir_suffix: Suffix to append to models_dir
+                - test_data_dir_suffix: Suffix for test data directory
+                - valid_data_dir_suffix: Suffix for validation data directory
+                - inout_suffix: Suffix for dataset identifier
+                - num_segments_exc: Number of excitatory segments (if applicable)
+                - num_segments_inh: Number of inhibitory segments (if applicable)
+        """
+        config = {}
+        
+        if model_type == 'IF_model':
+            config['model_dir_suffix'] = 'depth_1_filters_1_window_80/'
+            config['test_data_dir_suffix'] = 'IF_model_test/'
+            config['valid_data_dir_suffix'] = 'IF_model_valid/'
+            config['inout_suffix'] = 'IF'
+            config['num_segments_exc'] = 80
+            config['num_segments_inh'] = 20
+            
+        elif model_type == 'reduce_model':
+            config['model_dir_suffix'] = 'depth_7_filters_256_window_400/'
+            config['test_data_dir_suffix'] = 'reduce_model_test/'
+            config['valid_data_dir_suffix'] = 'reduce_model_valid/'
+            config['inout_suffix'] = 'reduce'
+            # Infer num_segments from input_channels
+            if input_channels is not None:
+                if input_channels % 2 == 0:
+                    config['num_segments_exc'] = input_channels // 2
+                    config['num_segments_inh'] = input_channels // 2
+                else:
+                    config['num_segments_exc'] = input_channels // 2
+                    config['num_segments_inh'] = input_channels // 2 + 1
+            else:
+                config['num_segments_exc'] = None
+                config['num_segments_inh'] = None
+                
+        elif model_type == 'Single_Neuron':
+            # Set data directory suffixes
+            config['test_data_dir_suffix'] = f'L5PC_{model_string}_test/'
+            config['valid_data_dir_suffix'] = f'L5PC_{model_string}_valid/'
+            config['inout_suffix'] = 'original'  # Will be overridden by SJC check if needed
+            
+            # Set model directory suffix based on model_string and model_size
+            if model_string == 'NMDA':
+                config['model_dir_suffix'] = ('depth_3_filters_256_window_400/' if model_size == 'small' 
+                                             else 'depth_7_filters_256_window_400/')
+            elif model_string == 'AMPA':
+                config['model_dir_suffix'] = ('depth_1_filters_128_window_400/' if model_size == 'small' 
+                                             else 'depth_7_filters_256_window_400/')
+            else:
+                raise ValueError(f"Unsupported model_string '{model_string}' for Single_Neuron model. Supported: 'NMDA', 'AMPA'")
+            
+            # Set num_segments (default for Single_Neuron)
+            config['num_segments_exc'] = 639
+            config['num_segments_inh'] = 639  # Will be overridden by SJC check if needed
+            
+        else:
+            raise ValueError(f"Unsupported model_type '{model_type}'. Supported: 'IF_model', 'reduce_model', 'Single_Neuron'")
+        
+        return config
 
     def setup_paths_and_files(self, models_dir, data_dir, model_string='NMDA', model_size='large', desired_fpr=0.002):
         """Setup paths and files"""
-        # Set model directory and data directory
-        if 'IF_model' in models_dir:
-            model_dir = models_dir + 'depth_1_filters_1_window_80/'
-            test_data_dir = data_dir + f'IF_model_test/'
-            valid_data_dir = data_dir + f'IF_model_valid/'
-        elif 'reduce_model' in models_dir:
-            model_dir = models_dir + 'depth_7_filters_256_window_400/'
-            test_data_dir = data_dir + f'reduce_model_test/'
-            valid_data_dir = data_dir + f'reduce_model_valid/'
-        elif 'Single_Neuron' in models_dir or 'single_neuron' in models_dir.lower():
-            # Set data directory
-            test_data_dir = data_dir + f'L5PC_{model_string}_test/'
-            valid_data_dir = data_dir + f'L5PC_{model_string}_valid/'
-            # Set model directory
-            if model_string == 'NMDA':
-                model_dir = models_dir + ('depth_3_filters_256_window_400/' if model_size == 'small' 
-                                        else 'depth_7_filters_256_window_400/')
-            elif model_string == 'AMPA':
-                model_dir = models_dir + ('depth_1_filters_128_window_400/' if model_size == 'small' 
-                                        else 'depth_7_filters_256_window_400/')
-            else:
-                raise ValueError(f"Unsupported model_string '{model_string}' for Single_Neuron model. Supported: 'NMDA', 'AMPA'")
-        else:
+        # Detect model type and get configuration
+        model_type = self._detect_model_type(models_dir)
+        if model_type is None:
             raise ValueError(f"Unable to determine model directory structure. models_dir must contain one of: 'IF_model', 'reduce_model', 'Single_Neuron'. Got: {models_dir}")
+        
+        config = self._get_model_config(model_type, model_string, model_size)
+        
+        # Build paths from configuration
+        model_dir = models_dir + config['model_dir_suffix']
+        test_data_dir = data_dir + config['test_data_dir_suffix']
+        valid_data_dir = data_dir + config['valid_data_dir_suffix']
         # Build output directory
         dataset_identifier = self._build_dataset_identifier(model_dir, model_size, desired_fpr)
         output_dir = f"./results/5_main_figure_replication/{dataset_identifier}"
@@ -484,12 +559,16 @@ class MainFigureReplication:
     def _build_dataset_identifier(self, model_dir, model_size, desired_fpr):
         """Build dataset identifier"""
         path_parts = model_dir.split('/')
-        # Extract InOut suffix
-        inout_suffix = 'original'
-
-        if 'IF_model' in model_dir:
-            inout_suffix = 'IF'
+        # Extract InOut suffix using unified model type detection
+        model_type = self._detect_model_type(model_dir)
+        if model_type:
+            config = self._get_model_config(model_type)
+            inout_suffix = config['inout_suffix']
         else:
+            inout_suffix = 'original'
+        
+        # Check for SJC variants (overrides default for Single_Neuron)
+        if model_type == 'Single_Neuron' or model_type is None:
             for part in path_parts:
                 if 'SJC' in part:
                     if 'AMPA' in part:
@@ -518,20 +597,21 @@ class MainFigureReplication:
         initializer_per_layer = architecture_dict.get('initializer_per_layer', [0.002] * 7)
         input_window_size = architecture_dict.get('input_window_size', 400)
 
-        if 'IF_model' in base_path:
-            num_segments_exc = 80
-            num_segments_inh = 20
-        elif 'reduce' in base_path.lower() and input_channels is not None:
-            # For reduce models, infer num_segments from input_channels
-            # If even: split evenly; if odd: inh gets one more than exc
-            if input_channels % 2 == 0:
-                num_segments_exc = input_channels // 2
-                num_segments_inh = input_channels // 2
-            else:
-                num_segments_exc = input_channels // 2
-                num_segments_inh = input_channels // 2 + 1
-            print(f"Reduce model detected: input_channels={input_channels}, num_segments_exc={num_segments_exc}, num_segments_inh={num_segments_inh}")
+        # Use unified model type detection and configuration
+        model_type = self._detect_model_type(base_path)
+        if model_type:
+            config = self._get_model_config(model_type, input_channels=input_channels)
+            num_segments_exc = config['num_segments_exc']
+            num_segments_inh = config['num_segments_inh']
+            
+            # Handle reduce_model special case with input_channels
+            if model_type == 'reduce_model' and input_channels is not None:
+                print(f"Reduce model detected: input_channels={input_channels}, num_segments_exc={num_segments_exc}, num_segments_inh={num_segments_inh}")
+            elif model_type == 'reduce_model' and input_channels is None:
+                # Fallback if input_channels not provided for reduce_model
+                raise ValueError("input_channels must be provided for reduce_model")
         else:
+            # Default to Single_Neuron configuration
             num_segments_exc = 639
             if 'SJC' in base_path:
                 num_segments_inh = 640
