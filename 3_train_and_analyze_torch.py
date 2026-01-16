@@ -442,7 +442,7 @@ def train_and_save(network_depth, num_filters_per_layer, input_window_size, num_
         print('-----------------------------------------------------------------------------------------')
         
         # save model every once and a while
-        if np.array(training_history_dict['val_spikes_loss'][-3:]).mean() < 0.05:
+        if np.array(training_history_dict['val_spikes_loss'][-3:]).mean() < 0.03:
             model_ID = np.random.randint(100000)
             modelID_str = 'ID_%d' %(model_ID)
             train_string = 'samples_%d' %(num_training_samples)

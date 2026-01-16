@@ -238,14 +238,27 @@ class MainFigureReplication:
             config['inout_suffix'] = 'IF'
             config['num_segments_exc'] = 80
             config['num_segments_inh'] = 20
-            config['strategy_part'] = ''
+            
+            # Extract strategy_part if full_model_dir is provided (format: IF_model_torch)
+            if full_model_dir is not None:
+                path_parts = full_model_dir.split('/')
+                strategy_part = path_parts[-3] if len(path_parts) >= 3 else path_parts[-1]
+                # For IF_model/reduce_model: format is "model_type_torch", torch is after second underscore
+                if '_' in strategy_part:
+                    parts = strategy_part.split('_', 2)
+                    if len(parts) >= 3:
+                        strategy_part = parts[2]  # Get part after second underscore
+                    else:
+                        strategy_part = parts[1] if len(parts) > 1 else ''
+                config['strategy_part'] = f'_{strategy_part}' if strategy_part else ''
+            else:
+                config['strategy_part'] = ''
             
         elif model_type == 'reduce_model':
             config['model_dir_suffix'] = 'depth_7_filters_256_window_400/'
             config['test_data_dir_suffix'] = 'reduce_model_test/'
             config['valid_data_dir_suffix'] = 'reduce_model_valid/'
             config['inout_suffix'] = 'reduce'
-            config['strategy_part'] = ''
             # Infer num_segments from input_channels
             if input_channels is not None:
                 if input_channels % 2 == 0:
@@ -257,6 +270,21 @@ class MainFigureReplication:
             else:
                 config['num_segments_exc'] = None
                 config['num_segments_inh'] = None
+            
+            # Extract strategy_part if full_model_dir is provided (format: reduce_model_torch)
+            if full_model_dir is not None:
+                path_parts = full_model_dir.split('/')
+                strategy_part = path_parts[-3] if len(path_parts) >= 3 else path_parts[-1]
+                # For IF_model/reduce_model: format is "model_type_torch", torch is after second underscore
+                if '_' in strategy_part:
+                    parts = strategy_part.split('_', 2)
+                    if len(parts) >= 3:
+                        strategy_part = parts[2]  # Get part after second underscore
+                    else:
+                        strategy_part = parts[1] if len(parts) > 1 else ''
+                config['strategy_part'] = f'_{strategy_part}' if strategy_part else ''
+            else:
+                config['strategy_part'] = ''
                 
         elif model_type == 'Single_Neuron':
             # Validate model_string and set configuration based on synapse type (NMDA or AMPA)

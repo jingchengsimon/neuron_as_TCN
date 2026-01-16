@@ -139,23 +139,13 @@ def train_and_save(network_depth, num_filters_per_layer, input_window_size, num_
 
     # batch_size and learning rate will be dynamically set based on model size after model creation
     # Set default values first (will be updated after model analysis)
-    batch_size = 8  # Default value, will be adjusted after model analysis
+    batch_size = 64  # Default value, will be adjusted after model analysis
     loss_weights_per_epoch = [[1.0, 0.02]] * num_epochs # [[1.0, 0.0200]] * num_epochs # Even higher spike weight
     num_train_steps_per_epoch = [100] * num_epochs  # Reduce number of training steps
 
     # ------------------------------------------------------------------
     # define network architecture params
     # ------------------------------------------------------------------
-
-    if 'IF_model' in train_data_dir:
-        num_segments_exc  = 80
-        num_segments_inh  = 20
-    else:
-        num_segments_exc  = 639 # 10042 + 16070
-        if 'SJC' in train_data_dir:
-            num_segments_inh  = 640 # 1023 + 1637 + 150 
-        else:
-            num_segments_inh  = 639 # 1023 + 1637 + 150 
 
     filter_sizes_per_layer = [54] + [24] * (network_depth - 1)
     initializer_per_layer         = [0.002] * network_depth
@@ -197,6 +187,19 @@ def train_and_save(network_depth, num_filters_per_layer, input_window_size, num_
     print('number of test files is %d' %(len(test_files)))
     print('-----------------------------------------------')
 
+    sample_file = train_files[0]
+    with open(sample_file, 'rb') as f:
+        sample_data = pickle.load(f)
+
+    # Extract number of synapses from data
+    if 'allSegmentsType' in sample_data['Params']:  # Original L5PC model
+        num_segments_exc = len(sample_data['Params']['allSegmentsType'])
+        num_segments_inh = len(sample_data['Params']['allSegmentsType'])
+    else:  # IF model or SJC model
+        num_segments_exc = len(sample_data['Results']['listOfSingleSimulationDicts'][0]['exInputSpikeTimes'])
+        num_segments_inh = len(sample_data['Results']['listOfSingleSimulationDicts'][0]['inhInputSpikeTimes'])
+
+    print(f'Detected from data: num_segments_exc = {num_segments_exc}, num_segments_inh = {num_segments_inh}')
     
     assert(input_window_size > sum(filter_sizes_per_layer))
     temporal_conv_net = create_temporaly_convolutional_model(input_window_size, num_segments_exc, num_segments_inh, 
@@ -215,7 +218,7 @@ def train_and_save(network_depth, num_filters_per_layer, input_window_size, num_
     
     # Dynamically set batch_size and learning rate based on model size
     if "小模型" in size_category or "Small" in model_info['size_category']:
-        batch_size = 256
+        batch_size = 64
         base_lr = 0.0006  # Small models use smaller learning rate
         print(f"\nDetected small model, setting batch_size = {batch_size}, base_lr = {base_lr}")
     # elif "大模型" in size_category or "Large" in model_info['size_category']:
@@ -223,10 +226,9 @@ def train_and_save(network_depth, num_filters_per_layer, input_window_size, num_
     #     base_lr = 0.0006  # Large models use larger learning rate (from 64 to 256, learning rate ×2)
     #     print(f"\nDetected large model, setting batch_size = {batch_size}, base_lr = {base_lr}")
     else:
-        # Medium models, use intermediate values
-        batch_size = 8
-        base_lr = 0.0001  # Medium models use medium learning rate
-        print(f"\nDetected medium model, setting batch_size = {batch_size}, base_lr = {base_lr}")
+        batch_size = 8 # Because we set 400ms window size, the batch size should be smaller
+        base_lr = 0.0001  # Because we set 400ms window size, the learning rate should be smaller
+        print(f"\nDetected large model, setting batch_size = {batch_size}, base_lr = {base_lr}")
     
     # Set learning rate schedule based on batch_size
     batch_size_per_epoch = [batch_size] * num_epochs
