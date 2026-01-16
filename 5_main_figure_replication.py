@@ -238,12 +238,14 @@ class MainFigureReplication:
             config['inout_suffix'] = 'IF'
             config['num_segments_exc'] = 80
             config['num_segments_inh'] = 20
+            config['strategy_part'] = ''
             
         elif model_type == 'reduce_model':
             config['model_dir_suffix'] = 'depth_7_filters_256_window_400/'
             config['test_data_dir_suffix'] = 'reduce_model_test/'
             config['valid_data_dir_suffix'] = 'reduce_model_valid/'
             config['inout_suffix'] = 'reduce'
+            config['strategy_part'] = ''
             # Infer num_segments from input_channels
             if input_channels is not None:
                 if input_channels % 2 == 0:
@@ -288,11 +290,13 @@ class MainFigureReplication:
                         config['inout_suffix'] = 'SJC_AMPA' if 'AMPA' in part else 'SJC_NMDA'
                         break
                 
-                # Extract strategy part
+                # Extract strategy part and include underscore prefix
                 strategy_part = path_parts[-3] if len(path_parts) >= 3 else path_parts[-1]
                 if '_' in strategy_part:
                     strategy_part = strategy_part.split('_', 1)[1]
-                config['strategy_part'] = strategy_part
+                config['strategy_part'] = f'_{strategy_part}'
+            else:
+                config['strategy_part'] = ''
             
         else:
             raise ValueError(f"Unsupported model_type '{model_type}'. Supported: 'IF_model', 'reduce_model', 'Single_Neuron'")
@@ -317,7 +321,7 @@ class MainFigureReplication:
         valid_data_dir = data_dir + config['valid_data_dir_suffix']
         
         # Build output directory
-        base_identifier = f"{config['inout_suffix']}_{config['strategy_part']}"
+        base_identifier = f"{config['inout_suffix']}{config['strategy_part']}"
         dataset_identifier = f'{base_identifier}/{model_size}/fpr{desired_fpr}'
         output_dir = f"./results/5_main_figure_replication/{dataset_identifier}"
         os.makedirs(output_dir, exist_ok=True)
