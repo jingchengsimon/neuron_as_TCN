@@ -24,7 +24,7 @@ from keras import initializers
 
 
 # share parse function from fit_CNN_torch
-from fit_CNN_torch import parse_sim_experiment_file
+from utils.fit_CNN_torch import parse_sim_experiment_file
 
 # some fixes for python 3
 if sys.version_info[0]<3:
