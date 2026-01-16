@@ -193,21 +193,30 @@ class MainFigureReplication:
 
     def setup_paths_and_files(self, models_dir, data_dir, model_string='NMDA', model_size='large', desired_fpr=0.002):
         """Setup paths and files"""
-        # Set data directory
-        test_data_dir = data_dir + f'L5PC_{model_string}_test/'
-        valid_data_dir = data_dir + f'L5PC_{model_string}_valid/'
-
-        # Set model directory
+        # Set model directory and data directory
         if 'IF_model' in models_dir:
             model_dir = models_dir + 'depth_1_filters_1_window_80/'
             test_data_dir = data_dir + f'IF_model_test/'
             valid_data_dir = data_dir + f'IF_model_valid/'
-        elif model_string == 'NMDA':
-            model_dir = models_dir + ('depth_3_filters_256_window_400/' if model_size == 'small' 
-                                    else 'depth_7_filters_256_window_400/')
-        elif model_string == 'AMPA':
-            model_dir = models_dir + ('depth_1_filters_128_window_400/' if model_size == 'small' 
-                                    else 'depth_7_filters_256_window_400/')
+        elif 'reduce_model' in models_dir:
+            model_dir = models_dir + 'depth_7_filters_256_window_400/'
+            test_data_dir = data_dir + f'L5PC_{model_string}_test/'
+            valid_data_dir = data_dir + f'L5PC_{model_string}_valid/'
+        elif 'Single_Neuron' in models_dir or 'single_neuron' in models_dir.lower():
+            # Set data directory
+            test_data_dir = data_dir + f'L5PC_{model_string}_test/'
+            valid_data_dir = data_dir + f'L5PC_{model_string}_valid/'
+            # Set model directory
+            if model_string == 'NMDA':
+                model_dir = models_dir + ('depth_3_filters_256_window_400/' if model_size == 'small' 
+                                        else 'depth_7_filters_256_window_400/')
+            elif model_string == 'AMPA':
+                model_dir = models_dir + ('depth_1_filters_128_window_400/' if model_size == 'small' 
+                                        else 'depth_7_filters_256_window_400/')
+            else:
+                raise ValueError(f"Unsupported model_string '{model_string}' for Single_Neuron model. Supported: 'NMDA', 'AMPA'")
+        else:
+            raise ValueError(f"Unable to determine model directory structure. models_dir must contain one of: 'IF_model', 'reduce_model', 'Single_Neuron'. Got: {models_dir}")
         # Build output directory
         dataset_identifier = self._build_dataset_identifier(model_dir, model_size, desired_fpr)
         output_dir = f"./results/5_main_figure_replication/{dataset_identifier}"

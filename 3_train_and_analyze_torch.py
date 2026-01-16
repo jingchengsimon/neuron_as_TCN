@@ -606,10 +606,6 @@ def main():
             # Combine into analysis suffix
             analysis_suffix = f"{test_suffix}_{model_part}"
         return analysis_suffix
-
-    # base_path = '/G/results/aim2_sjc/Models_TCN/IF_model_InOut' + test_suffix
-    # data_suffix = 'IF_model' 
-    # model_suffix = 'IF_model_torch' 
     
     # Dynamically build analysis suffix
     analysis_suffix = build_analysis_suffix(test_suffix, model_suffix)
