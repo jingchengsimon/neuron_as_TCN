@@ -544,6 +544,12 @@ def main():
     parser.add_argument('--model_name', type=str, default='NMDA_torch_ratio0.6_2',
                         help='Model name for model directory (default: NMDA_torch_ratio0.6_2)')
     
+    # Data sampling configuration arguments
+    parser.add_argument('--use_improved_sampling', type=str, default='True', choices=['True', 'False', 'true', 'false'],
+                        help='Whether to use improved data sampling strategy (default: True)')
+    parser.add_argument('--spike_rich_ratio', type=float, default=0.6,
+                        help='Ratio of samples containing spikes (default: 0.6)')
+    
     args = parser.parse_args()
     
     # ========== Configuration: All variables defined together ==========
@@ -561,8 +567,8 @@ def main():
     
     # Configure improvement options
     use_improved_initialization = False   # Set to True to enable improved initialization strategy
-    use_improved_sampling = True      # Set to True to enable improved data sampling strategy
-    spike_rich_ratio = 0.6              # 60% of samples contain spikes
+    use_improved_sampling = args.use_improved_sampling.lower() == 'true'
+    spike_rich_ratio = args.spike_rich_ratio
     
     # ========== PyTorch GPU Configuration ==========
     print("=== PyTorch GPU Configuration ===")
@@ -619,6 +625,13 @@ def main():
 
     # Dynamically build analysis suffix
     analysis_suffix = build_analysis_suffix(test_suffix, model_name)
+    
+    # Add sampling configuration abbreviations to paths
+    sampling_suffix = ''
+    if use_improved_sampling:
+        sampling_suffix = f'_ratio{spike_rich_ratio:.1f}'.replace('.', '')
+    model_name_with_sampling = f'{model_name}{sampling_suffix}'
+    analysis_suffix_with_sampling = f'{analysis_suffix}{sampling_suffix}'
 
     # Data directories
     train_data_dir = f'{base_path}/data/{dataset_name}_train/'
@@ -629,8 +642,8 @@ def main():
     for network_depth, num_filters_per_layer, input_window_size in product(network_depth_list, num_filters_per_layer_list, input_window_size_list): 
         
         # Model and analysis directories
-        model_dir = f'{base_path}/models/{model_name}/depth_{network_depth}_filters_{num_filters_per_layer}_window_{input_window_size}/'
-        analysis_dir = f'./results/3_model_analysis_plots/{analysis_suffix}/depth_{network_depth}_filters_{num_filters_per_layer}_window_{input_window_size}/'
+        model_dir = f'{base_path}/models/{model_name_with_sampling}/depth_{network_depth}_filters_{num_filters_per_layer}_window_{input_window_size}/'
+        analysis_dir = f'./results/3_model_analysis_plots/{analysis_suffix_with_sampling}/depth_{network_depth}_filters_{num_filters_per_layer}_window_{input_window_size}/'
 
         os.makedirs(model_dir, exist_ok=True)
         os.makedirs(analysis_dir, exist_ok=True)

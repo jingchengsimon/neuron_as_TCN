@@ -482,6 +482,12 @@ def main():
     parser.add_argument('--model_name', type=str, default='NMDA_tensorflow_ratio0.6',
                         help='Model name for model directory (default: NMDA_tensorflow_ratio0.6)')
     
+    # Data sampling configuration arguments
+    parser.add_argument('--use_improved_sampling', action='store_true', default=False,
+                        help='Use improved data sampling strategy (default: False, set this flag to enable)')
+    parser.add_argument('--spike_rich_ratio', type=float, default=0.6,
+                        help='Ratio of samples containing spikes (default: 0.6)')
+    
     args = parser.parse_args()
     
     # ========== Configuration: All variables defined together ==========
@@ -499,8 +505,9 @@ def main():
     
     # Configure improvement options
     use_improved_initialization = False   # Set to True to enable improved initialization strategy
-    use_improved_sampling = True       # Set to True to enable improved data sampling strategy
-    spike_rich_ratio = 0.6              # 60% of samples contain spikes
+    # Default to True if not explicitly set via command line (backward compatibility)
+    use_improved_sampling = args.use_improved_sampling if hasattr(args, 'use_improved_sampling') and args.use_improved_sampling else True
+    spike_rich_ratio = args.spike_rich_ratio
 
     # ========== GPU configuration code - added here ==========
     
@@ -580,6 +587,13 @@ def main():
     for network_depth, num_filters_per_layer, input_window_size in product(network_depth_list, num_filters_per_layer_list, input_window_size_list):
         # Dynamically build analysis suffix
         analysis_suffix = build_analysis_suffix(base_path, model_name)
+        
+        # Add sampling configuration abbreviations to paths
+        sampling_suffix = ''
+        if use_improved_sampling:
+            sampling_suffix = f'_ratio{spike_rich_ratio:.1f}'.replace('.', '')
+        model_name_with_sampling = f'{model_name}{sampling_suffix}'
+        analysis_suffix_with_sampling = f'{analysis_suffix}{sampling_suffix}'
     
         # Data directories
         train_data_dir = f'{base_path}/data/{dataset_name}_train/'
@@ -587,8 +601,8 @@ def main():
         test_data_dir = f'{base_path}/data/{dataset_name}_test/'
         
         # Model and analysis directories
-        model_dir = f'{base_path}/models/{model_name}/depth_{network_depth}_filters_{num_filters_per_layer}_window_{input_window_size}/'
-        analysis_dir = f'./results/3_model_analysis_plots/{analysis_suffix}/depth_{network_depth}_filters_{num_filters_per_layer}_window_{input_window_size}/'
+        model_dir = f'{base_path}/models/{model_name_with_sampling}/depth_{network_depth}_filters_{num_filters_per_layer}_window_{input_window_size}/'
+        analysis_dir = f'./results/3_model_analysis_plots/{analysis_suffix_with_sampling}/depth_{network_depth}_filters_{num_filters_per_layer}_window_{input_window_size}/'
         
         os.makedirs(model_dir, exist_ok=True)
         os.makedirs(analysis_dir, exist_ok=True)
