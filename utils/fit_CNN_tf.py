@@ -23,6 +23,9 @@ from keras.regularizers import l2
 from keras import initializers
 
 
+# share parse function from fit_CNN_torch
+from fit_CNN_torch import parse_sim_experiment_file
+
 # some fixes for python 3
 if sys.version_info[0]<3:
     import cPickle as pickle
@@ -30,80 +33,6 @@ else:
     import pickle
     basestring = str
     
-
-def dict2bin(row_inds_spike_times_map, num_segments, sim_duration_ms, syn_type, data_type=None):
-    
-    # Batch process dictionary keys before the loop
-    if syn_type == 'exc' and (data_type or '').lower() == 'sjc':
-        # For excitatory synapse dictionary, subtract 1 from all keys in SJC data (from 1-639 to 0-638)
-        adjusted_dict = {}
-        for key, value in row_inds_spike_times_map.items():
-            adjusted_dict[key - 1] = value
-        row_inds_spike_times_map = adjusted_dict
-    # For inh type, no need to modify keys
-
-    bin_spikes_matrix = np.zeros((num_segments, sim_duration_ms), dtype='bool')            
-    for row_ind in row_inds_spike_times_map.keys():
-        for spike_time in row_inds_spike_times_map[row_ind]:
-            bin_spikes_matrix[row_ind,spike_time] = 1.0
-    
-    return bin_spikes_matrix
-
-
-def parse_sim_experiment_file(sim_experiment_file, print_logs=False):
-    
-    if print_logs:
-        print('-----------------------------------------------------------------')
-        print("loading file: '" + sim_experiment_file.split("\\")[-1] + "'")
-        loading_start_time = time.time()
-        
-    if sys.version_info[0]<3:
-        experiment_dict = pickle.load(open(sim_experiment_file, "rb" ))
-    else:
-        experiment_dict = pickle.load(open(sim_experiment_file, "rb" ),encoding='latin1')
-    
-    # detect data type from full path (not only basename)
-    path_lower = str(sim_experiment_file).lower()
-    data_type = 'sjc' if 'sjc' in path_lower else 'original'
-    
-    # gather params
-    num_simulations = len(experiment_dict['Results']['listOfSingleSimulationDicts'])
-    if 'allSegmentsType' in experiment_dict['Params']: # model_original
-        num_segments_exc  = len(experiment_dict['Params']['allSegmentsType'])
-        num_segments_inh  = len(experiment_dict['Params']['allSegmentsType'])
-    else: # model_aim1_sjc
-        num_segments_exc  = len(experiment_dict['Results']['listOfSingleSimulationDicts'][0]['exInputSpikeTimes'])
-        num_segments_inh  = len(experiment_dict['Results']['listOfSingleSimulationDicts'][0]['inhInputSpikeTimes'])
-    if 'totalSimDurationInSec' in experiment_dict['Params']:
-        sim_duration_ms = experiment_dict['Params']['totalSimDurationInSec'] * 1000
-    else:
-        sim_duration_ms = experiment_dict['Params']['STIM DURATION'] - 100
-    num_ex_synapses  = num_segments_exc
-    num_inh_synapses = num_segments_inh
-    num_synapses = num_ex_synapses + num_inh_synapses
-    
-    # collect X, y_spike, y_soma
-    X = np.zeros((num_synapses, sim_duration_ms, num_simulations), dtype='bool')
-    y_spike = np.zeros((sim_duration_ms,num_simulations))
-    y_soma  = np.zeros((sim_duration_ms,num_simulations))
-    
-    # go over all simulations in the experiment and collect their results
-    for k, sim_dict in enumerate(experiment_dict['Results']['listOfSingleSimulationDicts']):
-        X_ex  = dict2bin(sim_dict['exInputSpikeTimes'], num_segments_exc, sim_duration_ms, 'exc', data_type)
-        X_inh = dict2bin(sim_dict['inhInputSpikeTimes'], num_segments_inh, sim_duration_ms, 'inh', data_type)
-        X[:,:,k] = np.vstack((X_ex,X_inh))
-        spike_times = (sim_dict['outputSpikeTimes'].astype(float) - 0.5).astype(int)
-        y_spike[spike_times,k] = 1.0
-        y_soma[:,k] = sim_dict['somaVoltageLowRes']
-        
-    if print_logs:
-        loading_duration_sec = time.time() - loading_start_time
-        print('loading took %.3f seconds' %(loading_duration_sec))
-        print('-----------------------------------------------------------------')
-
-    return X, y_spike, y_soma
-
-
 def create_temporaly_convolutional_model(max_input_window_size, num_segments_exc, num_segments_inh, filter_sizes_per_layer,
                                                                                              num_filters_per_layer,
                                                                                              activation_function_per_layer,
