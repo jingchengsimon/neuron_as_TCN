@@ -200,8 +200,8 @@ class MainFigureReplication:
             valid_data_dir = data_dir + f'IF_model_valid/'
         elif 'reduce_model' in models_dir:
             model_dir = models_dir + 'depth_7_filters_256_window_400/'
-            test_data_dir = data_dir + f'L5PC_{model_string}_test/'
-            valid_data_dir = data_dir + f'L5PC_{model_string}_valid/'
+            test_data_dir = data_dir + f'reduce_model_test/'
+            valid_data_dir = data_dir + f'reduce_model_valid/'
         elif 'Single_Neuron' in models_dir or 'single_neuron' in models_dir.lower():
             # Set data directory
             test_data_dir = data_dir + f'L5PC_{model_string}_test/'
