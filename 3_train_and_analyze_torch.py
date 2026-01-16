@@ -501,6 +501,9 @@ def build_analysis_suffix(base_path, model_name):
             # Extract the last component (e.g., 'reduce_model' from '/path/to/reduce_model_InOut')
             if '/' in inout_part:
                 inout_part = inout_part.split('/')[-1]
+            # Remove trailing underscore if present
+            if inout_part.endswith('_'):
+                inout_part = inout_part[:-1]
     else:
         inout_part = 'original' # base_path.split('/')[-1]  # If no 'InOut', take last part
     
