@@ -600,7 +600,16 @@ def main():
         
         # Extract part after underscore from model suffix
         if '_' in model_suffix:
-            model_part = model_suffix.split('_', 1)[1]  # Get part after first underscore
+            if model_suffix.startswith('IF_') or model_suffix.startswith('reduce_'):
+                # For IF and reduce models, get the third part (e.g., "torch" from "reduce_model_torch")
+                parts = model_suffix.split('_')
+                if len(parts) >= 3:
+                    model_part = parts[2]  # Get the third part
+                else:
+                    model_part = model_suffix.split('_', 1)[1]  # Fallback to second part
+            else:
+                # For single neuron, get the second part (e.g., "torch_ratio0.6_2" from "NMDA_torch_ratio0.6_2")
+                model_part = model_suffix.split('_', 1)[1]  # Get part after first underscore
         else:
             model_part = model_suffix
         

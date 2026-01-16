@@ -559,7 +559,16 @@ def main():
         
         # Extract part after underscore from model suffix
         if '_' in model_suffix:
-            model_part = model_suffix.split('_', 1)[1]  # Get part after first underscore
+            if model_suffix.startswith('IF_') or model_suffix.startswith('reduce_'):
+                # For IF and reduce models, get the third part (e.g., "torch" from "reduce_model_torch")
+                parts = model_suffix.split('_')
+                if len(parts) >= 3:
+                    model_part = parts[2]  # Get the third part
+                else:
+                    model_part = model_suffix.split('_', 1)[1]  # Fallback to second part
+            else:
+                # For single neuron, get the second part (e.g., "torch_ratio0.6_2" from "NMDA_torch_ratio0.6_2")
+                model_part = model_suffix.split('_', 1)[1]  # Get part after first underscore
         else:
             model_part = model_suffix
         
@@ -569,11 +578,6 @@ def main():
 
     # 2. Main control loop
     for network_depth, num_filters_per_layer, input_window_size in product(network_depth_list, num_filters_per_layer_list, input_window_size_list):
-            
-        # base_path = '/G/results/aim2_sjc/Models_TCN/IF_model_InOut' + test_suffix
-        # data_suffix = 'IF_model' #'L5PC_NMDA'
-        # model_suffix = 'IF_model_tensorflow' #'NMDA_tensorflow'
-        
         # Dynamically build analysis suffix
         analysis_suffix = build_analysis_suffix(base_path, model_suffix)
     
