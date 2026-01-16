@@ -584,29 +584,30 @@ def main():
         print(f"Spike-rich sample ratio: {spike_rich_ratio * 100:.0f}%")
     print(f"================\n")
 
-    def build_analysis_suffix(test_suffix, model_suffix):
+    def build_analysis_suffix(base_path, model_suffix):
         """
         Dynamically build analysis suffix
-        Extract part after underscore from model suffix and combine with test suffix
+        Extract part after 'InOut' from base path, extract part after underscore from model suffix
         """
-        if 'IF_model' in model_suffix:
-            analysis_suffix = 'IF_model'
+        # Extract part after 'InOut' from base path
+        if 'InOut' in base_path:
+            inout_part = base_path.split('InOut')[-1]  # Get part after 'InOut'
+            # If result starts with underscore, remove leading underscore
+            if inout_part.startswith('_'):
+                inout_part = inout_part[1:]
         else:
-            if test_suffix.startswith('_'):
-                test_suffix = test_suffix[1:]
-            else:
-                test_suffix = 'original' 
+            inout_part = 'original' # base_path.split('/')[-1]  # If no 'InOut', take last part
         
-            # Extract part after underscore from model suffix
-            if '_' in model_suffix:
-                model_part = model_suffix.split('_', 1)[1]  # Get part after first underscore
-            else:
-                model_part = model_suffix
-            
-            # Combine into analysis suffix
-            analysis_suffix = f"{test_suffix}_{model_part}"
+        # Extract part after underscore from model suffix
+        if '_' in model_suffix:
+            model_part = model_suffix.split('_', 1)[1]  # Get part after first underscore
+        else:
+            model_part = model_suffix
+        
+        # Combine into analysis suffix
+        analysis_suffix = f"{inout_part}_{model_part}"
         return analysis_suffix
-    
+
     # Dynamically build analysis suffix
     analysis_suffix = build_analysis_suffix(test_suffix, model_suffix)
 
