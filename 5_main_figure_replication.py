@@ -270,7 +270,14 @@ class MainFigureReplication:
         elif isinstance(model_state, dict):
             print("Loading state dict directly - reconstructing model architecture")
             print("Available keys:", list(model_state.keys())[:10])
-            temporal_conv_net = self._reconstruct_model_from_architecture(architecture_dict, device, base_path)
+            # Get input channels from checkpoint weights if available
+            input_channels = None
+            if 'tcn.0.conv.weight' in model_state:
+                input_channels = model_state['tcn.0.conv.weight'].shape[1]
+                print(f"Inferred input channels from checkpoint: {input_channels}")
+            temporal_conv_net = self._reconstruct_model_from_architecture(
+                architecture_dict, device, base_path, input_channels=input_channels
+            )
             temporal_conv_net.load_state_dict(model_state, strict=False)
             temporal_conv_net.eval()
             temporal_conv_net, device = self._device_selector.safe_model_to_device(temporal_conv_net, device)
@@ -491,7 +498,7 @@ class MainFigureReplication:
         return f'{base_identifier}/{model_size}/fpr{desired_fpr}'
 
     
-    def _reconstruct_model_from_architecture(self, architecture_dict, device, base_path=""):
+    def _reconstruct_model_from_architecture(self, architecture_dict, device, base_path="", input_channels=None):
         """Reconstruct PyTorch model from architecture dictionary using TCNModel from fit_CNN_torch"""
         num_filters_per_layer = architecture_dict.get('num_filters_per_layer', [256] * 7)
         filter_sizes_per_layer = architecture_dict.get('filter_sizes_per_layer', [54, 24, 24, 24, 24, 24, 24])
@@ -505,6 +512,16 @@ class MainFigureReplication:
         if 'IF_model' in base_path:
             num_segments_exc = 80
             num_segments_inh = 20
+        elif 'reduce' in base_path.lower() and input_channels is not None:
+            # For reduce models, infer num_segments from input_channels
+            # If even: split evenly; if odd: inh gets one more than exc
+            if input_channels % 2 == 0:
+                num_segments_exc = input_channels // 2
+                num_segments_inh = input_channels // 2
+            else:
+                num_segments_exc = input_channels // 2
+                num_segments_inh = input_channels // 2 + 1
+            print(f"Reduce model detected: input_channels={input_channels}, num_segments_exc={num_segments_exc}, num_segments_inh={num_segments_inh}")
         else:
             num_segments_exc = 639
             if 'SJC' in base_path:
