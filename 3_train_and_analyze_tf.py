@@ -477,10 +477,10 @@ def main():
                         help='Test suffix to append to base path (default: empty string)')
     parser.add_argument('--base_subpath', type=str, default='Single_Neuron_InOut',
                         help='Base subpath for data and model directories (default: Single_Neuron_InOut)')
-    parser.add_argument('--data_suffix', type=str, default='L5PC_NMDA',
-                        help='Data suffix for train/valid/test directories (default: L5PC_NMDA)')
-    parser.add_argument('--model_suffix', type=str, default='NMDA_tensorflow_ratio0.6',
-                        help='Model suffix for model directory (default: NMDA_tensorflow_ratio0.6)')
+    parser.add_argument('--dataset_name', type=str, default='L5PC_NMDA',
+                        help='Dataset name for train/valid/test directories (default: L5PC_NMDA)')
+    parser.add_argument('--model_name', type=str, default='NMDA_tensorflow_ratio0.6',
+                        help='Model name for model directory (default: NMDA_tensorflow_ratio0.6)')
     
     args = parser.parse_args()
     
@@ -494,8 +494,8 @@ def main():
     # Path configuration
     test_suffix = args.test_suffix
     base_path = f'/G/results/aim2_sjc/Models_TCN/{args.base_subpath}{test_suffix}'
-    data_suffix = args.data_suffix
-    model_suffix = args.model_suffix
+    dataset_name = args.dataset_name
+    model_name = args.model_name
     
     # Configure improvement options
     use_improved_initialization = False   # Set to True to enable improved initialization strategy
@@ -543,10 +543,10 @@ def main():
         print(f"Spike-rich sample ratio: {spike_rich_ratio * 100:.0f}%")
     print(f"================\n")
 
-    def build_analysis_suffix(base_path, model_suffix):
+    def build_analysis_suffix(base_path, model_name):
         """
         Dynamically build analysis suffix
-        Extract part after 'InOut' from base path, extract part after underscore from model suffix
+        Extract part after 'InOut' from base path, extract part after underscore from model name
         """
         # Extract part after 'InOut' from base path
         if 'InOut' in base_path:
@@ -557,20 +557,20 @@ def main():
         else:
             inout_part = 'original' # base_path.split('/')[-1]  # If no 'InOut', take last part
         
-        # Extract part after underscore from model suffix
-        if '_' in model_suffix:
-            if model_suffix.startswith('IF_') or model_suffix.startswith('reduce_'):
+        # Extract part after underscore from model name
+        if '_' in model_name:
+            if model_name.startswith('IF_') or model_name.startswith('reduce_'):
                 # For IF and reduce models, get the third part (e.g., "torch" from "reduce_model_torch")
-                parts = model_suffix.split('_')
+                parts = model_name.split('_')
                 if len(parts) >= 3:
                     model_part = parts[2]  # Get the third part
                 else:
-                    model_part = model_suffix.split('_', 1)[1]  # Fallback to second part
+                    model_part = model_name.split('_', 1)[1]  # Fallback to second part
             else:
                 # For single neuron, get the second part (e.g., "torch_ratio0.6_2" from "NMDA_torch_ratio0.6_2")
-                model_part = model_suffix.split('_', 1)[1]  # Get part after first underscore
+                model_part = model_name.split('_', 1)[1]  # Get part after first underscore
         else:
-            model_part = model_suffix
+            model_part = model_name
         
         # Combine into analysis suffix
         analysis_suffix = f"{inout_part}_{model_part}"
@@ -579,15 +579,15 @@ def main():
     # 2. Main control loop
     for network_depth, num_filters_per_layer, input_window_size in product(network_depth_list, num_filters_per_layer_list, input_window_size_list):
         # Dynamically build analysis suffix
-        analysis_suffix = build_analysis_suffix(base_path, model_suffix)
+        analysis_suffix = build_analysis_suffix(base_path, model_name)
     
         # Data directories
-        train_data_dir = f'{base_path}/data/{data_suffix}_train/'
-        valid_data_dir = f'{base_path}/data/{data_suffix}_valid/'
-        test_data_dir = f'{base_path}/data/{data_suffix}_test/'
+        train_data_dir = f'{base_path}/data/{dataset_name}_train/'
+        valid_data_dir = f'{base_path}/data/{dataset_name}_valid/'
+        test_data_dir = f'{base_path}/data/{dataset_name}_test/'
         
         # Model and analysis directories
-        model_dir = f'{base_path}/models/{model_suffix}/depth_{network_depth}_filters_{num_filters_per_layer}_window_{input_window_size}/'
+        model_dir = f'{base_path}/models/{model_name}/depth_{network_depth}_filters_{num_filters_per_layer}_window_{input_window_size}/'
         analysis_dir = f'./results/3_model_analysis_plots/{analysis_suffix}/depth_{network_depth}_filters_{num_filters_per_layer}_window_{input_window_size}/'
         
         os.makedirs(model_dir, exist_ok=True)
