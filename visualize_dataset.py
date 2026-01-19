@@ -18,6 +18,12 @@ from datetime import datetime
 from contextlib import redirect_stdout
 from io import StringIO
 
+try:
+    # Optional dependency used in the notebook version
+    from scipy.ndimage import gaussian_filter1d
+except Exception:
+    gaussian_filter1d = None
+
 def merge_simulation_pickles(file_list):
     """
     Merge multiple simulation pickle files into a single list
@@ -139,6 +145,126 @@ def plot_firing_rate_histograms(simulation_list, res_label='Low', ex_syn_num=9, 
     
     plt.close()
 
+def _gaussian_smooth_1d(x: np.ndarray, sigma: float) -> np.ndarray:
+    """
+    Smooth a 1D signal with Gaussian kernel. Uses scipy if available; otherwise falls back to a simple moving average.
+    """
+    if gaussian_filter1d is not None:
+        return gaussian_filter1d(x, sigma=sigma)
+    # Fallback: simple moving average with window size proportional to sigma
+    win = max(1, int(round(sigma * 2)))
+    kernel = np.ones(win, dtype=np.float32) / float(win)
+    return np.convolve(x, kernel, mode='same')
+
+def compute_firing_rate(spike_times, t_start, t_end, dt, sigma, num_syn):
+    """
+    Convert spike times to a smoothed firing rate (Hz) over [t_start, t_end] with bin size dt (ms).
+    """
+    n_bins = int((t_end - t_start) / dt) + 1
+    spike_train = np.zeros(n_bins, dtype=np.float32)
+    for t in spike_times:
+        if t_start <= t < t_end:
+            idx = int(t - t_start)
+            if 0 <= idx < n_bins:
+                spike_train[idx] += 1.0
+    smoothed = _gaussian_smooth_1d(spike_train, sigma=sigma)
+    # Convert to Hz and normalize by number of synapses
+    denom = (dt / 1000.0) * max(1, int(num_syn))
+    return smoothed / denom
+
+def plot_simulation_detail(
+    sim,
+    t_start=0,
+    t_end=6000,
+    res_label='Low',
+    ex_syn_num=9,
+    inh_syn_num=9,
+    sigma=20,
+    save_path=None,
+):
+    """
+    Plot a detailed view for a single simulation (voltage, output spikes, input rasters, firing rates).
+    Adapted from `jupyter_notebooks/pickle_load.ipynb`.
+    """
+    time = sim[f'recordingTime{res_label}Res']
+    mask = (time >= t_start) & (time <= t_end)
+    time_sel = time[mask]
+    soma_v = sim[f'somaVoltage{res_label}Res'][mask]
+
+    fig, axes = plt.subplots(
+        4,
+        1,
+        figsize=(min(40, 10 * (t_end - t_start) / 1000.0), 6 * 4.3 / 2.8),
+        sharex=True,
+        gridspec_kw={'height_ratios': [1, 0.3, 1.5, 1.5]},
+    )
+
+    for ax in axes:
+        ax.set_xlim(t_start, t_end)
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+
+    # Soma voltage
+    axes[0].set_ylabel('Voltage (mV)')
+    axes[0].set_ylim(-80, 0)
+    axes[0].plot(time_sel, soma_v, label='Soma Voltage', color='k')
+    axes[0].set_title(f'Soma Voltage Trace {res_label} Res')
+    axes[0].legend(loc='upper left')
+
+    # Output spikes
+    output_spike_times = sim.get('outputSpikeTimes', np.array([]))
+    output_spike_times = output_spike_times[(output_spike_times >= t_start) & (output_spike_times <= t_end)]
+    axes[1].vlines(output_spike_times, 0, 1, color='purple', linewidth=1.0)
+    axes[1].set_ylabel('Output')
+    axes[1].set_yticks([1])
+    axes[1].set_title('Output Spike Raster')
+
+    # Input rasters
+    spikes_exc = sim['exInputSpikeTimes']
+    spikes_inh = sim['inhInputSpikeTimes']
+    for spikes, color, offset in [(spikes_exc, 'b', 0), (spikes_inh, 'r', len(spikes_exc))]:
+        for syn_id, spike_times in spikes.items():
+            spike_times_sel = [t for t in spike_times if t_start <= t <= t_end]
+            axes[2].vlines(
+                spike_times_sel,
+                offset + syn_id - 0.4,
+                offset + syn_id + 0.4,
+                color=color,
+                linewidth=2,
+            )
+    axes[2].set_title('Excitatory and Inhibitory Input Raster')
+    axes[2].set_ylabel('Input Syn ID')
+    axes[2].set_xlabel('Time (ms)')
+
+    # Firing rates
+    all_spike_times_exc = []
+    for spike_times in spikes_exc.values():
+        all_spike_times_exc.extend([t for t in spike_times if t_start <= t <= t_end])
+    all_spike_times_inh = []
+    for spike_times in spikes_inh.values():
+        all_spike_times_inh.extend([t for t in spike_times if t_start <= t <= t_end])
+
+    dt = 1  # ms
+    time_bins = np.arange(t_start, t_end + dt, dt)
+    firing_rate_exc = compute_firing_rate(all_spike_times_exc, t_start, t_end, dt, sigma=sigma, num_syn=ex_syn_num)
+    firing_rate_inh = compute_firing_rate(all_spike_times_inh, t_start, t_end, dt, sigma=sigma, num_syn=inh_syn_num)
+
+    axes[3].plot(time_bins, firing_rate_exc, color='b', label='Excitatory')
+    axes[3].plot(time_bins, firing_rate_inh, color='r', label='Inhibitory')
+    axes[3].set_ylabel('Firing rate (Hz)')
+    axes[3].set_xlabel('Time (ms)')
+    axes[3].set_title('Instantaneous Firing Rate (Gaussian smoothing)')
+    axes[3].legend()
+
+    print(f'Average Excitatory firing rate: {np.mean(firing_rate_exc):.2f} Hz')
+    print(f'Average Inhibitory firing rate: {np.mean(firing_rate_inh):.2f} Hz')
+
+    plt.tight_layout()
+    if save_path:
+        plt.savefig(save_path, dpi=200, bbox_inches='tight')
+        print(f"Simulation detail saved to: {save_path}")
+    plt.close(fig)
+
 def main():
     # Configuration
     root_folder_path = '/G/results/aim2_sjc/Data/reduce_model_output_dataset'
@@ -165,6 +291,14 @@ def main():
     with redirect_stdout(output_buffer):
         # Load and merge simulation data
         simulation_list = merge_simulation_pickles(file_list)
+
+        # Load a representative single-file set for detailed per-simulation visualization
+        # (matches the notebook pattern: "*0009.p")
+        single_file_list = sorted(glob.glob(os.path.join(root_folder_path, '*0009.p')))
+        if len(single_file_list) == 0:
+            # Fallback: use the first available file
+            single_file_list = [file_list[0]]
+        simulation_list_ori = merge_simulation_pickles(single_file_list)
         
         # Detect number of segments from first simulation
         if len(simulation_list) > 0:
@@ -182,6 +316,22 @@ def main():
         plot_firing_rate_histograms(simulation_list, res_label='Low', 
                                    ex_syn_num=ex_syn_num, inh_syn_num=inh_syn_num,
                                    save_path=histogram_path)
+
+        # Plot simulation details for selected indices (notebook snippet: epoch_idx in [2, 3])
+        detail_indices_1based = [2, 3]
+        for epoch_idx in detail_indices_1based:
+            sim_idx = epoch_idx - 1
+            if 0 <= sim_idx < len(simulation_list_ori):
+                detail_path = os.path.join(output_dir, f'simulation_detail_{epoch_idx}.png')
+                plot_simulation_detail(
+                    simulation_list_ori[sim_idx],
+                    t_start=0,
+                    t_end=6000,
+                    res_label='Low',
+                    ex_syn_num=ex_syn_num,
+                    inh_syn_num=inh_syn_num,
+                    save_path=detail_path,
+                )
     
     # Get captured output
     captured_output = output_buffer.getvalue()
