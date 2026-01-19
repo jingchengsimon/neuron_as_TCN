@@ -1,22 +1,17 @@
 import os
-import glob
 import time
 import pickle
+import argparse
 import importlib.util
 import numpy as np
 import matplotlib
-import matplotlib.pyplot as plt
 import tensorflow as tf
 from keras.models import load_model
 from sklearn.metrics import mean_squared_error as MSE, mean_absolute_error as MAE
 from sklearn.metrics import explained_variance_score, roc_curve, auc
-from utils.find_best_model import find_best_model
-from utils.fit_CNN import parse_sim_experiment_file
-from utils.fit_CNN_torch import parse_multiple_sim_experiment_files
-from utils.visualization_utils import plot_summary_panels, plot_voltage_traces
 
 _SPEC = importlib.util.spec_from_file_location(
-    "torch_mfr", os.path.join(os.path.dirname(os.path.abspath(__file__)), "5_main_figure_replication.py")
+    "torch_mfr", os.path.join(os.path.dirname(os.path.abspath(__file__)), "5_main_figure_replication_torch.py")
 )
 _TORCH_MFR = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(_TORCH_MFR)
@@ -396,19 +391,35 @@ def main(models_dir, data_dir, model_string='NMDA', model_size='large', desired_
 
         
 if __name__ == "__main__":
-
-    data_suffix = 'NMDA'
-
-    base_path = '/G/results/aim2_sjc/Models_TCN/Single_Neuron_InOut/'
-    models_dir = base_path + f'models/{data_suffix}_tensorflow_ratio0.6/'
+    # ========== Parse command line arguments ==========
+    parser = argparse.ArgumentParser(description='Main figure replication (TensorFlow version)')
+    
+    # Path and model configuration arguments (keep naming consistent with train scripts)
+    parser.add_argument('--base_subpath', type=str, default='Single_Neuron_InOut',
+                        help='Base subpath for data/model directories (default: Single_Neuron_InOut)')
+    parser.add_argument('--model_name', type=str, default='NMDA_tensorflow_ratio0.6',
+                        help='Model name for model directory (default: NMDA_tensorflow_ratio0.6)')
+    parser.add_argument('--desired_fpr', type=float, default=0.002,
+                        help='Desired false positive rate for threshold determination (default: 0.002)')
+    parser.add_argument('--model_size', type=str, default='large',
+                        help='Model size category (default: large)')
+    
+    args = parser.parse_args()
+    
+    # ========== Configuration: Build paths from arguments ==========
+    base_path = f'/G/results/aim2_sjc/Models_TCN/{args.base_subpath}/'
+    models_dir = base_path + f'models/{args.model_name}/'
     data_dir = base_path + 'data/'
-
-    # models_dir = '/G/results/aim2_sjc/Models_TCN/IF_model_InOut/models/IF_model_tensorflow/'
-    # data_dir = '/G/results/aim2_sjc/Models_TCN/IF_model_InOut/data/'
     
-    desired_fpr = 0.002
+    print(f"\n=== Configuration ===")
+    print(f"Desired FPR: {args.desired_fpr}")
+    print(f"Model size: {args.model_size}")
+    print(f"Models directory: {models_dir}")
+    print(f"==================\n")
     
+    # Extract model_string from model_name (e.g., 'NMDA' from 'NMDA_tensorflow_ratio0.6')
+    model_string = args.model_name.split('_')[0] if '_' in args.model_name else args.model_name
     
-    main(models_dir, data_dir, data_suffix, 'large', desired_fpr)
+    main(models_dir, data_dir, model_string, args.model_size, args.desired_fpr)
 
 
