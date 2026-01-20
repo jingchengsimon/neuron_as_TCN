@@ -318,7 +318,7 @@ def main():
                                    save_path=histogram_path)
 
         # Plot simulation details for selected indices (notebook snippet: epoch_idx in [2, 3])
-        detail_indices_1based = [2, 3]
+        detail_indices_1based = [4, 5, 6, 7]
         for epoch_idx in detail_indices_1based:
             sim_idx = epoch_idx - 1
             if 0 <= sim_idx < len(simulation_list_ori):

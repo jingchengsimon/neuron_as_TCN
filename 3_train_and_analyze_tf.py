@@ -490,8 +490,8 @@ def main():
                         help='Model name for model directory (default: NMDA_tensorflow_ratio0.6)')
     
     # Data sampling configuration arguments
-    parser.add_argument('--use_improved_sampling', action='store_true', default=False,
-                        help='Use improved data sampling strategy (default: False, set this flag to enable)')
+    parser.add_argument('--use_improved_sampling', type=str, default='True', choices=['True', 'False', 'true', 'false'],
+                        help='Whether to use improved data sampling strategy (default: True)')
     parser.add_argument('--spike_rich_ratio', type=float, default=0.6,
                         help='Ratio of samples containing spikes (default: 0.6)')
     

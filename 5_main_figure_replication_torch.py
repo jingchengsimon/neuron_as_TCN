@@ -400,7 +400,11 @@ class MainFigureReplication:
         model_metadata_dict = pickle.load(open(model_metadata_filename, "rb"), encoding='latin1')
         architecture_dict = model_metadata_dict['architecture_dict']
         device = self._device_selector.get_optimal_device()
-        model_state = torch.load(model_filename, map_location=device)
+        try:
+            model_state = torch.load(model_filename, map_location=device, weights_only=True)
+        except TypeError:
+            # 老版本不支持 weights_only 参数，回退
+            model_state = torch.load(model_filename, map_location=device)
         print(f"Loaded model type: {type(model_state)}")
         if isinstance(model_state, dict) and 'state_dict' in model_state:
             print("Loading from checkpoint with state_dict")
