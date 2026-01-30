@@ -563,6 +563,52 @@ def plot_auc_analysis(results, save_dir):
     plt.savefig(os.path.join(save_dir, 'auc_vs_loss.png'), dpi=300, bbox_inches='tight')
     plt.close()
 
+
+def prune_results_keep_top(results, top_n=10, delete_files=False):
+    """
+    保留基于 ROC AUC 排序的前 top_n 个模型。可选地删除不在前 top_n 的模型文件（.pickle 和对应的 .pt 权重文件）。
+
+    参数:
+    - results: load_model_results 返回的模型结果列表（每个元素包含 'model_path' 和 'auc_metrics'）
+    - top_n: 保留的模型数量
+    - delete_files: 如果为 True，会在磁盘上删除非保留模型的文件
+
+    返回:
+    - pruned_results: 仅包含前 top_n 个模型的列表
+    """
+    if not results:
+        return results
+
+    # 按 roc_auc_spike 排序；缺失 AUC 的模型被视为最差（排序到末尾）
+    def get_auc_score(r):
+        try:
+            return r['auc_metrics']['roc_auc_spike'] if r['auc_metrics'] is not None else -1.0
+        except Exception:
+            return -1.0
+
+    results_sorted = sorted(results, key=get_auc_score, reverse=True)
+
+    keep = results_sorted[:top_n]
+    keep_paths = set([r['model_path'] for r in keep])
+
+    to_remove = [r for r in results if r['model_path'] not in keep_paths]
+
+    if delete_files and to_remove:
+        for r in to_remove:
+            pkl = r['model_path']
+            pt = pkl.replace('.pickle', '.pt')
+            for f in (pkl, pt):
+                try:
+                    if os.path.exists(f):
+                        os.remove(f)
+                        print(f"Deleted file: {f}")
+                except Exception as e:
+                    print(f"Failed to delete {f}: {e}")
+
+    print(f"Pruned results: keeping top {len(keep)} models; removed {len(to_remove)} models.")
+    return keep
+
+
 def print_model_summary(results):
     """
     打印模型总结，包括AUC指标
@@ -628,6 +674,10 @@ def main():
         return
     
     print(f"Found {len(results)} models to analyze.")
+
+    # 仅保留前 10 个 AUC 最好的模型以节省内存；默认仅在内存中删除，不删除磁盘文件
+    results = prune_results_keep_top(results, top_n=10, delete_files=False)
+    print(f"After pruning, {len(results)} models remain (top 10 kept).")
     
     # 创建保存目录
     os.makedirs(save_dir, exist_ok=True)

@@ -10,7 +10,8 @@ from utils.gpu_monitor import GPUMonitor, configure_pytorch_gpu, get_gpu_memory_
 from utils.fit_CNN_torch import TCNModel, SimulationDataGenerator
 from utils.model_analysis import (
     load_model_results, print_model_summary, 
-    plot_training_curves, plot_model_comparison, analyze_training_stability, plot_auc_analysis
+    plot_training_curves, plot_model_comparison, analyze_training_stability, plot_auc_analysis,
+    prune_results_keep_top
 )
 from utils.model_size_utils import get_model_size_info, analyze_model_size
 # TensorFlow/Keras imports removed - using PyTorch instead
@@ -526,10 +527,14 @@ def build_analysis_suffix(base_path, model_name):
     analysis_suffix = f"{inout_part}_{model_part}"
     return analysis_suffix
 
-def analyze_and_save(models_dir, test_data_dir, save_dir):
+def analyze_and_save(models_dir, test_data_dir, save_dir, prune_keep=10, prune_delete=True):
 
     """
-    Run complete model analysis, including AUC evaluation
+    Run complete model analysis, including AUC evaluation. Optionally prune models on disk to keep only top-N by ROC AUC.
+
+    Parameters:
+        prune_keep: int, number of top models to keep
+        prune_delete: bool, if True delete non-top models from disk
     """
     print("Loading model results...")
     results = load_model_results(models_dir, test_data_dir)
@@ -566,6 +571,12 @@ def analyze_and_save(models_dir, test_data_dir, save_dir):
         print(f"Best model by AUC: {best_model['model_name']}")
         print(f"Best ROC AUC: {best_model['auc_metrics']['roc_auc_spike']:.4f}")
 
+    # Prune on-disk model files if requested
+    if prune_keep is not None:
+        print(f"Pruning models on disk to keep top {prune_keep} (delete_files={prune_delete})...")
+        prune_results_keep_top(results, top_n=prune_keep, delete_files=prune_delete)
+        print("Prune operation completed.")
+
 def main():
     # ========== Parse command line arguments ==========
     parser = argparse.ArgumentParser(description='Train and analyze TCN model (PyTorch version)')
@@ -595,6 +606,13 @@ def main():
                         help='Whether to use improved data sampling strategy (default: True)')
     parser.add_argument('--spike_rich_ratio', type=float, default=0.6,
                         help='Ratio of samples containing spikes (default: 0.6)')
+
+    # Pruning options: keep top-N models; by default deletion of non-top models is ENABLED.
+    parser.add_argument('--prune-keep', type=int, default=10,
+                        help='Number of top models to keep after analysis (default: 10)')
+    parser.add_argument('--no-prune-delete', dest='prune_delete', action='store_false',
+                        help='Do NOT delete model files on disk (default is to delete non-top models)')
+    parser.set_defaults(prune_delete=True)
     
     args = parser.parse_args()
     
@@ -686,7 +704,9 @@ def main():
         analyze_and_save(
             models_dir=model_dir,
             test_data_dir=test_data_dir,
-            save_dir=analysis_dir
+            save_dir=analysis_dir,
+            prune_keep=args.prune_keep,
+            prune_delete=args.prune_delete
         )
 
     print("\nAll hyperparameter combinations training and analysis completed!") 
