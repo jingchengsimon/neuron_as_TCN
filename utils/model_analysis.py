@@ -55,6 +55,19 @@ def calculate_auc_metrics(model_path, test_data_dir):
         dilation_rates_per_layer = arch['dilation_rates_per_layer']
         initializer_per_layer = arch['initializer_per_layer']
 
+        # Normalize and validate test_data_dir
+        original_test_data_dir = test_data_dir
+        test_data_dir = os.path.abspath(os.path.expanduser(test_data_dir))
+        if not os.path.isdir(test_data_dir):
+            # Try interpreting user input as absolute path (user may have omitted leading '/')
+            alt_dir = os.path.abspath(os.path.expanduser(os.path.join(os.sep, original_test_data_dir.lstrip(os.sep))))
+            if os.path.isdir(alt_dir):
+                test_data_dir = alt_dir
+                print(f"Interpreting test_data_dir as absolute path: {test_data_dir}")
+            else:
+                print(f"Test data directory not found: {test_data_dir}")
+                return None
+
         # Need to know number of segments to build model; read one test file to get num_segments
         test_files_probe = glob.glob(os.path.join(test_data_dir, '*.p'))
         if not test_files_probe:
@@ -208,6 +221,23 @@ def load_model_results(models_dir, test_data_dir):
     """
     Load all saved model results, including AUC evaluation
     """
+    # Normalize and validate test_data_dir early to avoid repeated missing-file messages
+    original_test_data_dir = test_data_dir
+    test_data_dir = os.path.abspath(os.path.expanduser(test_data_dir))
+    if not os.path.isdir(test_data_dir):
+        # Try interpreting user input as absolute path if leading '/' omitted
+        alt_dir = os.path.abspath(os.path.expanduser(os.path.join(os.sep, original_test_data_dir.lstrip(os.sep))))
+        if os.path.isdir(alt_dir):
+            test_data_dir = alt_dir
+            print(f"Interpreting test_data_dir as absolute path: {test_data_dir}")
+        else:
+            print(f"Test data directory not found: {test_data_dir}")
+            return []
+    test_files_probe = glob.glob(os.path.join(test_data_dir, '*.p'))
+    if not test_files_probe:
+        print(f"No test files found in {test_data_dir}")
+        return []
+
     model_pickles = glob.glob(os.path.join(models_dir, '*.pickle'))
     results = []
     
