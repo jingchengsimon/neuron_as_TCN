@@ -255,7 +255,7 @@ class MainFigureReplication:
                 config['strategy_part'] = ''
             
         elif model_type == 'reduce_model':
-            config['model_dir_suffix'] = 'depth_7_filters_256_window_400/'
+            config['model_dir_suffix'] = 'depth_1_filters_256_window_400/'
             config['test_data_dir_suffix'] = 'reduce_model_test/'
             config['valid_data_dir_suffix'] = 'reduce_model_valid/'
             config['inout_suffix'] = 'reduce'

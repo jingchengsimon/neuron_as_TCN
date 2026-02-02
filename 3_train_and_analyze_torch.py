@@ -21,6 +21,9 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.cuda as cuda
 
+# Set CUDA_VISIBLE_DEVICES to use GPU 1
+os.environ['CUDA_VISIBLE_DEVICES'] = '1'
+
 def create_lr_warmup_decay(init_lr, max_lr):
     """
     Create learning rate warmup and decay scheduling function (dynamic version)
@@ -284,24 +287,17 @@ def train_and_save(network_depth, num_filters_per_layer, input_window_size, num_
             for g in optimizer.param_groups:
                 g['lr'] = learning_rate
         
+        # Simplify training output: Remove GPU-related information
         print('-----------------------------------------------')
-        print('starting epoch %d:' %(learning_schedule))
+        print(f'starting epoch {learning_schedule}:')
         print('-----------------------------------------------')
-        print('loss weights = %s' %(str(loss_weights)))
-        print('batch_size = %d' %(batch_size))
+        print(f'loss weights = {loss_weights}')
+        print(f'batch_size = {batch_size}')
         print('-----------------------------------------------')
         
         # Add time monitoring in training loop
         start_time = time.time()
         
-        # Create GPU monitor
-        gpu_monitor = GPUMonitor()
-        print("GPU status before training:")
-        gpu_monitor.print_status("  ")
-        memory_info = get_gpu_memory_info()
-        if memory_info:
-            print(f"PyTorch GPU memory - Allocated: {memory_info['allocated']:.2f}GB, Reserved: {memory_info['reserved']:.2f}GB")
-
         # Use PyTorch training loop instead of Keras fit_generator
         train_epoch_spike_losses = []
         train_epoch_soma_losses = []
@@ -398,13 +394,6 @@ def train_and_save(network_depth, num_filters_per_layer, input_window_size, num_
 
         training_time = time.time() - start_time
         print(f"Training time: {training_time:.2f}s")
-        print("GPU status after training:")
-        gpu_monitor.print_status("  ")
-        
-        # Print PyTorch GPU memory information
-        memory_info = get_gpu_memory_info()
-        if memory_info:
-            print(f"PyTorch GPU memory - Allocated: {memory_info['allocated']:.2f}GB, Reserved: {memory_info['reserved']:.2f}GB, Max allocated: {memory_info['max_allocated']:.2f}GB")
         
         # Clear GPU memory
         if cuda.is_available():
