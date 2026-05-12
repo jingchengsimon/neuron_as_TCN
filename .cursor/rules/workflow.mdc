@@ -1,0 +1,63 @@
+---
+description: Workflow conventions — pipeline order, output structure, coding style
+globs: ["**/*.py"]
+alwaysApply: true
+---
+
+# Workflow Conventions
+
+## Pipeline Execution Order
+
+```
+1_load_and_visualize.py       → EDA, sanity-check data shapes
+2_dataset_pipeline.py         → Build train/val/test splits
+3_train_and_analyze_torch.py  → Train TCNModel, save .pt + .pickle
+4_model_prediction_visualization.py → Evaluate on held-out data
+5_main_figure_replication_torch.py  → Reproduce paper figures
+6_activity_optimization.py    → Gradient-based input optimization
+```
+
+Each script is self-contained and callable independently. Do not create circular imports between numbered scripts.
+
+## Output Directory Structure
+
+```
+results/
+└── <step>_<descriptor>/
+    ├── *.pdf          # publication figures
+    ├── *.png          # preview figures
+    └── *.csv          # tabular summaries (optional)
+
+models/
+└── <experiment_name>/
+    ├── <run_id>.pt
+    └── <run_id>.pickle
+```
+
+Always use `os.makedirs(save_dir, exist_ok=True)` before writing outputs.
+
+## Coding Style Rules
+
+- Python 3.8+. No Python 2 compatibility code in new functions.
+- Docstrings: Google style with `Args:`, `Returns:`, `Example:` sections.
+- String formatting: f-strings only (no `%` or `.format()`).
+- NaN handling: `np.nan_to_num(x, nan=0.0, posinf=1.0, neginf=0.0)` + `torch.nan_to_num(...)`.
+- Shape comments required on every tensor creation/transpose line: `# (B, T, C)`.
+- `os.makedirs(path, exist_ok=True)` — always include `exist_ok=True`.
+- Wrap optional heavy imports with try/except + `<LIB>_AVAILABLE` boolean.
+
+## Training Loop Invariants
+
+- Dual-output model: always predict and track both `y_spike` (BCE loss) and `y_soma` (MSE loss).
+- History dict keys: `val_spikes_loss`, `val_somatic_loss`, `val_loss` (total).
+- `find_best_model()` selects by `min(val_spikes_loss)` — do not change the key.
+- LR schedule: warmup for 10 epochs then exponential decay at rate 0.95 (see `create_lr_warmup_decay`).
+
+## Extending the Project
+
+- New reusable function → `utils/<existing_or_new_module>.py`
+- New plot type → `utils/visualization_utils.py`, use `_setup_plot_style` + `_add_statistics_text`
+- New model variant → subclass `TCNModel` in `utils/fit_CNN_torch.py`
+- New pipeline step → `<N>_<verb>_<noun>[_torch].py` at project root
+- Do NOT duplicate logic that already exists in another utils module
+- Do NOT modify `visualization_utils_backup.py`

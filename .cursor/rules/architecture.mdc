@@ -1,0 +1,71 @@
+---
+description: Architecture constraints — module responsibilities, data shapes, device handling
+globs: ["**/*.py"]
+alwaysApply: true
+---
+
+# Architecture Constraints
+
+## Module Responsibilities
+
+| Module | Responsibility | Do NOT add |
+|---|---|---|
+| `utils/fit_CNN_torch.py` | `TCNModel`, `CausalConv1d`, `SimulationDataGenerator`, data parsing helpers | TF/Keras code |
+| `utils/fit_CNN_tf.py` | TF/Keras equivalents — **legacy, no new features** | PyTorch code |
+| `utils/tcn_poisson_model.py` | `TCNPoissonModel` wrapping frozen TCN + STE Poisson | Training logic |
+| `utils/model_analysis.py` | AUC metrics, training-curve & comparison plots | Model definition |
+| `utils/visualization_utils.py` | All matplotlib helpers | Model or training code |
+| `utils/gpu_monitor.py` | `GPUMonitor`, `configure_pytorch_gpu()` | Model code |
+| `utils/model_size_utils.py` | Parameter counting, size classification (both backends) | Plotting |
+| `utils/find_best_model.py` | Best-model selector by min val loss | Metric computation |
+| Top-level `N_*.py` | Orchestration only — import from utils, call functions | Reusable logic |
+
+## Data Shape Invariants
+
+```
+bin_spikes_matrix  : (num_segments, sim_duration_ms)      # C × T
+firing_rates       : (num_segments, time_duration_ms)     # C × T
+X (numpy, raw)     : (num_segments, sim_duration_ms, num_simulations)  # C × T × N
+X (after transpose): (num_simulations, time_steps, num_segments)       # N × T × C
+X_batch / model input (torch): (batch_size, time_steps, num_segments)  # B × T × C
+y_spike / y_soma   : (batch_size, time_steps, 1)                       # B × T × 1
+spike_trains (TCNPoissonModel): (batch_size*2, num_segments, time_duration_ms)  # 2B × C × T
+model_input (before conv): permute → (batch_size, num_segments, time_steps)     # B × C × T
+```
+
+Segment order is always: `[:num_segments_exc]` = excitatory, `[num_segments_exc:]` = inhibitory.
+
+## Critical Invariants — Never Change
+
+1. `CausalConv1d` pads left only: `F.pad(x, (pad_left, 0))`. No symmetric padding.
+2. STE expression in `TCNPoissonModel.forward`:
+   `first_half_spikes = poisson_samples + safe_firing_rates - safe_firing_rates.detach()`
+   Do not simplify — this preserves the gradient path.
+3. `tcn_model` inside `TCNPoissonModel` always has `requires_grad = False`.
+4. `load_state_dict(state, strict=False)` — keep `strict=False` for partial loading.
+5. `spike_time_mono_syn = input_window_size // 2` — must be integer division.
+6. SJC key adjustment (`key - 1`) applies **only** in `dict2bin` for `syn_type='exc'` and `data_type='sjc'`.
+7. `.pickle` and `.pt` (or `.h5`) always share the same file stem.
+
+## Framework Separation
+
+- PyTorch files: `*_torch.py`
+- TF files: `*_tf.py`
+- Never mix `import tensorflow` and `import torch` in one file, except `model_size_utils.py`.
+- Optional imports must use try/except + `<LIB>_AVAILABLE` flag pattern.
+
+## Device Handling
+
+```python
+# Always auto-detect — never hardcode
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+# configure_pytorch_gpu() is the only place that sets:
+torch.backends.cudnn.benchmark = True
+```
+
+## Per-Layer Lists
+
+`filter_sizes_per_layer`, `num_filters_per_layer`, `activation_function_per_layer`,
+`strides_per_layer`, `dilation_rates_per_layer`, `initializer_per_layer`
+must all have length equal to `network_depth`. Always pass and store them together.

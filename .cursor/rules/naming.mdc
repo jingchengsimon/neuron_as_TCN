@@ -1,0 +1,48 @@
+---
+description: Naming conventions for variables, functions, classes, and files
+globs: ["**/*.py"]
+alwaysApply: true
+---
+
+# Naming Conventions
+
+## Variables — Domain-Specific Names (never rename these)
+
+- `num_segments_exc` — excitatory segment count
+- `num_segments_inh` — inhibitory segment count
+- `num_segments` / `num_segments_total` — total count
+- `sim_duration_ms` / `time_duration_ms` — time in **milliseconds**
+- `input_window_size` — TCN receptive window, in ms
+- `bin_spikes_matrix` — binary spike matrix, shape `(num_segments, sim_duration_ms)`
+- `row_inds_spike_times_map` — spike dictionary: key=segment_index, value=list[int]
+- `firing_rates` — shape `(num_segments, time_duration_ms)`
+- `safe_<name>` — NaN/Inf-cleaned version of `<name>`, e.g. `safe_firing_rates`
+- `architecture_dict` — model architecture sub-dict inside `model_params`
+- `training_history_dict` — training history sub-dict inside saved pickle
+- `monoconn_seg_indices` — fixed excitatory indices for monosynaptic stimulation
+
+## Tensor Suffix Convention
+
+- No suffix → `np.ndarray`
+- `_t` suffix → `torch.Tensor` (e.g. `X_batch_t`, `y_spike_batch_t`)
+- Always annotate shape with a comment: `# (B, T, C)`
+
+## Functions
+
+- Style: `snake_case`, **verb-first**
+- Examples: `load_test_data`, `calculate_auc_metrics`, `plot_training_curves`, `get_model_size_info`
+- Private helpers: leading underscore — `_add_statistics_text`, `_count_params_pytorch`
+- Boolean flag parameters: `use_<feature>` — `use_improved_sampling`, `use_torch`
+
+## Classes
+
+- Style: `PascalCase`
+- Established names: `TCNModel`, `TCNPoissonModel`, `GPUMonitor`, `FiringRatesProcessor`, `SimulationDataGenerator`, `CausalConv1d`
+
+## Files
+
+- Pipeline scripts: `<N>_<verb>_<noun>[_torch|_tf].py`
+- Utility modules: `<noun>_<noun>.py` (no step number)
+- Plots: `<descriptor>_<plot_type>.pdf` (publication) or `.png` (preview)
+- Model weights: `<descriptor>_torch.pt` / `<descriptor>_tf.h5`
+- Metadata: `<descriptor>.pickle` (same stem as weights file)

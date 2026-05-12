@@ -409,7 +409,7 @@ def run_simulation(trial_id, save_dir=None, plot_results=False):
     output_spike_times = np.array(output_spikes, dtype=np.float32)
     
     # Create simulation dictionary
-    sim_dict = {
+    sim_dict = { 
         'voltage': voltage_trace.astype(np.float32),  # Array of voltage values
         'exInputSpikeTimes': ex_input_raster,  # Shape: (n_exc, n_time_steps)
         'inhInputSpikeTimes': inh_input_raster,  # Shape: (n_inh, n_time_steps)

@@ -6,7 +6,7 @@ import pickle
 import argparse
 from datetime import datetime  
 from itertools import product
-from utils.gpu_monitor import GPUMonitor, configure_pytorch_gpu, get_gpu_memory_info
+from utils.gpu_monitor import GPUMonitor, configure_pytorch_gpu
 from utils.fit_CNN_torch import TCNModel, SimulationDataGenerator
 from utils.model_analysis import (
     load_model_results, print_model_summary, 

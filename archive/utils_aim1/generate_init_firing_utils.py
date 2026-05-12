@@ -3,19 +3,51 @@ import multiprocessing
 from tqdm import tqdm
 import numpy as np
 import pandas as pd
-from utils_aim1.generate_pink_noise import make_noise
+import numpy as np
+from scipy import signal as ss
+from scipy.stats import zscore
+
+def make_noise(num_traces=10, num_samples=1000, spike_gen_seed=42, scale=0.5):
+    np.random.seed(spike_gen_seed)
+    
+    num_samples = num_samples+2000
+    # Normalised Frequencies
+    # fv = np.linspace(0, 1, 40)
+    # Amplitudes Of '1/f'                                
+    # a = 1/(1+2*fv)                
+    # Filter Numerator Coefficients              
+    # b = ss.firls(43, fv, a)                                   
+
+    B = [0.049922035, -0.095993537, 0.050612699, -0.004408786]
+    A = [1, -2.494956002,   2.017265875,  -0.522189400]
+
+    invfn = np.zeros((num_traces,num_samples))
+
+    for i in np.arange(0, num_traces):
+        # Create White Noise
+        wn = np.random.normal(loc=1, scale=scale, size=num_samples)  # scale=0.5
+        # Create '1/f' Noise
+        invfn[i,:] = zscore(ss.lfilter(B, A, wn))                          
+
+    return invfn[:,2000:]
+
 
 # Match segments with function groups of pink noise
 def generate_init_firing(section_synapse_df, DURATION, FREQ_EXC, FREQ_INH,
-                         input_ratio_basal_apic, num_func_group, spk_epoch_idx, spat_condition):
+                         input_ratio_basal_apic, bg_exc_channel_type, num_func_group, 
+                         synapse_pos_seed, spike_gen_seed, spat_condition):
 
     sec_syn_bg_exc_df = section_synapse_df[section_synapse_df['type'].isin(['A'])]
     num_syn_bg_exc = len(sec_syn_bg_exc_df)
 
     segments_dend_df = pd.read_csv('all_segments_dend.csv')
     num_func_group = 2 # segments_dend_df.shape[0] #num_func_group # (26,000/5)/100 = 52
+    pink_noise_array = make_noise(num_traces=num_func_group, num_samples=DURATION, spike_gen_seed=spike_gen_seed, scale=0.5)
+    
+    # Generate log-normal distribution
+    loc_rnd = np.random.default_rng(synapse_pos_seed)
+    spk_rnd = np.random.default_rng(spike_gen_seed)  # Create a new random state
 
-    pink_noise_array = make_noise(num_traces=num_func_group, num_samples=DURATION, spk_epoch_idx=spk_epoch_idx, scale=0.5)
     
     num_segments = segments_dend_df.shape[0]
     exc_firing_rate_array = np.zeros((num_segments, DURATION))  # Shape: (NUM_SYN_BASAL_EXC, DURATION)
@@ -52,13 +84,13 @@ def generate_init_firing(section_synapse_df, DURATION, FREQ_EXC, FREQ_INH,
             exc_firing_rate = FREQ_EXC/1000 * pink_noise if section['region'] == 'basal' else FREQ_EXC/(input_ratio_basal_apic*1000) * pink_noise
             exc_firing_rate_array[segment_index] += exc_firing_rate
 
+
     with ThreadPoolExecutor(max_workers=multiprocessing.cpu_count()) as executor:
-        list(executor.map(process_section, range(num_syn_bg_exc)))
+        list(tqdm(executor.map(process_section, range(num_syn_bg_exc)), total=num_syn_bg_exc))
         # executor.map(process_section, range(num_syn_bg_exc))
 
-    inh_delay = 4
-    inh_firing_rate_array[1:,inh_delay:] = FREQ_INH/1000 * exc_firing_rate_array[:,:DURATION-inh_delay]/np.mean(exc_firing_rate_array[:,:DURATION-inh_delay])
-    inh_firing_rate_array[0,inh_delay:] = FREQ_INH/1000 * exc_firing_rate_array[0,:DURATION-inh_delay]/np.mean(exc_firing_rate_array[:,:DURATION-inh_delay]) # np.mean(exc_firing_rate_array[0])
+    inh_firing_rate_array[1:] = FREQ_INH/1000 * exc_firing_rate_array/np.mean(exc_firing_rate_array)
+    inh_firing_rate_array[0] = FREQ_INH/1000 * exc_firing_rate_array[0]/np.mean(exc_firing_rate_array) # np.mean(exc_firing_rate_array[0])
 
     return exc_firing_rate_array, inh_firing_rate_array
 

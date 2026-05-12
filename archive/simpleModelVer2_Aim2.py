@@ -98,10 +98,14 @@ class CellWithNetworkx:
         with ThreadPoolExecutor(max_workers=multiprocessing.cpu_count()) as executor:
             list(executor.map(generate_synapse, range(num_syn)))
 
-    def add_inputs(self, spat_condition, input_ratio_basal_apic, num_func_group):
+    def add_inputs(self, spat_condition, input_ratio_basal_apic, bg_exc_channel_type, num_func_group):
+        # generate_init_firing(section_synapse_df, DURATION, FREQ_EXC, FREQ_INH,
+        #                     input_ratio_basal_apic, bg_exc_channel_type, num_func_group,
+        #                     synapse_pos_seed, spike_gen_seed, spat_condition)
         exc_firing_rate_array, inh_firing_rate_array = generate_init_firing(
             self.section_synapse_df, self.SIMU_DURATION, self.FREQ_EXC, self.FREQ_INH,
-            input_ratio_basal_apic, num_func_group, self.spk_epoch_idx, spat_condition)
+            input_ratio_basal_apic, bg_exc_channel_type, num_func_group,
+            self.epoch_idx, self.spk_epoch_idx, spat_condition)
         
         return np.concatenate((exc_firing_rate_array, inh_firing_rate_array), axis=0)
       
@@ -212,9 +216,11 @@ def run_simulation_batch(num_runs=2, epoch=1, rebuild_cell=False):
                 cell = build_cell(**params)
             
             # 生成firing_rate_array
-            firing_rate_array = cell.add_inputs(params['synaptic spatial condition'], 
-                                               params['input ratio of basal to apical'], 
-                                               params['number of functional groups'])
+            firing_rate_array = cell.add_inputs(
+                params['synaptic spatial condition'],
+                params['input ratio of basal to apical'],
+                params['background excitatory channel type'],
+                params['number of functional groups'])
             
             all_firing_arrays.append(firing_rate_array)
         

@@ -1,3 +1,4 @@
+import argparse
 import gc
 import os
 import numpy as np
@@ -122,6 +123,11 @@ class FiringRatesProcessor:
             # Single sample, expand to batch
             firing_rates_np = firing_rates_np[np.newaxis, :, :]  # (1, num_segments, full_time)
         
+        if firing_rates_np.ndim != 3:
+            raise ValueError(
+                f"firing_rates must be 2D (num_segments, time) or 3D (batch, num_segments, time), "
+                f"got shape {firing_rates_np.shape}. Initial simulation may have failed."
+            )
         current_batch_size, num_segments, full_time = firing_rates_np.shape
         
         # Handle segments count mismatch
@@ -516,35 +522,52 @@ class ActivityOptimizer:
         return evaluation_results
 
 
-def main():
+def main(args=None):
     """
-    Main function: run activity optimization
+    Main function: run activity optimization.
+    If args is None, uses default configuration (backward compatible).
     """
+    # Defaults when not using parser
+    if getattr(args, 'models_dir', None):
+        models_dir = args.models_dir
+    else:
+        base_path = getattr(args, 'base_path', '/G/results/aim2_sjc/Models_TCN/')
+        models_dir = f'{base_path}{args.base_subpath}/models/{args.model_name}/{args.architecture}/'
+    batch_size = args.batch_size
+    save_dir_idx_start = args.save_dir_idx_start
+    save_dir_idx_end = args.save_dir_idx_end
+    seeds = args.seeds
+    num_iterations = args.num_iterations
+    learning_rate = args.learning_rate
+
     print("=== Activity Optimization ===")
-    models_dir = '/G/results/aim2_sjc/Models_TCN/Single_Neuron_InOut_SJC_funcgroup2_var2/models/NMDA_torch/depth_7_filters_256_window_400/'
-    # models_dir = '/G/results/aim2_sjc/Models_TCN/Single_Neuron_InOut_SJC_funcgroup2_var2_AMPA/models/AMPA_torch/depth_1_filters_128_window_400/'
-    
     data_type = 'NMDA' if 'NMDA' in models_dir else 'AMPA'
-    batch_size = 200
 
     # Select fixed excitatory indices
-    range0_idx = [1, 2, 4, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 26, 
-                  27, 30, 31, 34, 35, 36, 37, 40, 43, 44, 45, 46, 47, 48, 49, 52, 53, 54, 55, 
+    range0_idx = [1, 2, 4, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 26,
+                  27, 30, 31, 34, 35, 36, 37, 40, 43, 44, 45, 46, 47, 48, 49, 52, 53, 54, 55,
                   56, 57, 58, 61, 64, 65, 66, 69, 72, 73, 74, 75, 76, 79, 80, 81, 82, 83, 84]
 
-    for save_dir_idx in range(2, 6):
+    for save_dir_idx in range(save_dir_idx_start, save_dir_idx_end):
         # random choose 3 indices
         np.random.seed(save_dir_idx)
-        monoconn_seg_indices = np.random.choice(range0_idx, size=3, replace=False) # torch.randperm(self.num_segments_exc)[:3].numpy()
+        monoconn_seg_indices = np.random.choice(range0_idx, size=3, replace=False)
         print(f"Fixed excitatory segments for adding spikes: {monoconn_seg_indices}")
-        
+
         # Store heatmap data for all seeds
         all_seeds_heatmap_data = []
-            
-        for random_seed in [42, 43, 44, 45, 46, 47]:
+
+        for random_seed in seeds:
             save_dir = f'./results/6_activity_optimization_results/{data_type}_seed_{random_seed}_inhfixed_{save_dir_idx}'
 
             init_firing_rates = run_simulation_batch(num_runs=batch_size, epoch=random_seed, rebuild_cell=False)
+            # Fail fast if simulation returned empty or invalid data
+            if init_firing_rates is None or (hasattr(init_firing_rates, 'shape') and (init_firing_rates.size == 0 or init_firing_rates.ndim not in (2, 3))):
+                raise ValueError(
+                    "Initial firing rates are empty or invalid (simulation may have failed). "
+                    "Expected 2D (num_segments, time) or 3D (batch, num_segments, time). "
+                    "Check that generate_init_firing and run_simulation_batch run without errors."
+                )
 
             try:
                 model_path, params_path = find_best_model(models_dir)
@@ -561,9 +584,9 @@ def main():
             )
 
             optimized_firing_rates, firing_rates_history, loss_history, spike_preds_history, gradient_norm_history = optimizer.optimize_activity(
-                num_iterations=500,
-                learning_rate=0.002,
-                batch_size=batch_size,  # 增加batch_size，确保有对照组和刺激组
+                num_iterations=num_iterations,
+                learning_rate=learning_rate,
+                batch_size=batch_size,
                 target_spike_prob=1,
                 start_time_ms=0,
                 random_seed=random_seed
@@ -633,4 +656,44 @@ def main():
             print(f"Average heatmap saved to: {average_heatmap_save_path}")
 
 if __name__ == "__main__":
-    main() 
+    # ========== Parse command line arguments ==========
+    parser = argparse.ArgumentParser(description='Activity optimization (PyTorch version)')
+
+    # Path and model configuration (consistent with 3_train_and_analyze_torch / 5_main_figure_replication_torch)
+    parser.add_argument('--models_dir', type=str, default=None,
+                        help='Full path to models directory (overrides base_path + base_subpath + model_name + architecture if set)')
+    parser.add_argument('--base_path', type=str, default='/G/results/aim2_sjc/Models_TCN/',
+                        help='Base path for models (default: /G/results/aim2_sjc/Models_TCN/)')
+    parser.add_argument('--base_subpath', type=str, default='Single_Neuron_InOut_SJC_funcgroup2_var2',
+                        help='Base subpath under base_path (default: Single_Neuron_InOut_SJC_funcgroup2_var2)')
+    parser.add_argument('--model_name', type=str, default='NMDA_torch',
+                        help='Model name / folder under models/ (default: NMDA_torch)')
+    parser.add_argument('--architecture', type=str, default='depth_7_filters_256_window_400',
+                        help='Architecture subfolder under model_name (default: depth_7_filters_256_window_400)')
+
+    # Optimization and run configuration
+    parser.add_argument('--batch_size', type=int, default=200,
+                        help='Batch size for optimization (default: 200)')
+    parser.add_argument('--save_dir_idx_start', type=int, default=2,
+                        help='Start index for save_dir_idx loop (default: 2)')
+    parser.add_argument('--save_dir_idx_end', type=int, default=6,
+                        help='End index for save_dir_idx loop (default: 6)')
+    parser.add_argument('--seeds', type=int, nargs='+', default=[42, 43, 44, 45, 46, 47],
+                        help='Random seeds for optimization runs (default: 42 43 44 45 46 47)')
+    parser.add_argument('--num_iterations', type=int, default=500,
+                        help='Number of optimization iterations (default: 500)')
+    parser.add_argument('--learning_rate', type=float, default=0.002,
+                        help='Learning rate for optimization (default: 0.002)')
+
+    args = parser.parse_args()
+
+    # ========== Configuration summary ==========
+    if args.models_dir:
+        print(f"Models directory (override): {args.models_dir}")
+    else:
+        print(f"Models directory: {args.base_path}{args.base_subpath}/models/{args.model_name}/{args.architecture}/")
+    print(f"Batch size: {args.batch_size}, Seeds: {args.seeds}")
+    print(f"Save dir index range: [{args.save_dir_idx_start}, {args.save_dir_idx_end})")
+    print(f"Optimization: num_iterations={args.num_iterations}, learning_rate={args.learning_rate}\n")
+
+    main(args) 

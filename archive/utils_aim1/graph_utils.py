@@ -1,12 +1,9 @@
-import networkx as nx
 import re
+import networkx as nx
 import pandas as pd
 from networkx.drawing.nx_pydot import graphviz_layout
 import matplotlib.pyplot as plt
-import json
-
-from Bio import Phylo
-from Bio.Phylo.PhyloXML import Phylogeny, Clade
+from Bio.Phylo.PhyloXML import Clade
 
 def create_directed_graph(all_sections, all_segments, section_df):
     parent_list, parent_index_list = [], []

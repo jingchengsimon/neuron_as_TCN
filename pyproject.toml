@@ -1,0 +1,40 @@
+[tool.ruff]
+target-version = "py38"
+line-length = 120
+select = [
+    "E",   # pycodestyle errors
+    "F",   # pyflakes
+    "I",   # isort
+    "W",   # pycodestyle warnings
+]
+ignore = [
+    "E501",  # line too long (handled by formatter)
+    "F401",  # unused import (too noisy during exploration)
+]
+exclude = [
+    "utils/visualization_utils_backup.py",  # read-only reference snapshot
+    "utils/fit_CNN_tf.py",                  # legacy TF file, not actively developed
+    "tests/",
+]
+
+[tool.ruff.isort]
+known-first-party = ["utils"]
+force-sort-within-sections = true
+
+[tool.ruff.format]
+quote-style = "single"
+indent-style = "space"
+
+[tool.mypy]
+python_version = "3.8"
+ignore_missing_imports = true   # torch, tensorflow stubs incomplete
+warn_unused_ignores = false
+exclude = [
+    "utils/visualization_utils_backup.py",
+    "utils/fit_CNN_tf.py",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["*.py"]
+python_functions = ["test_*"]
