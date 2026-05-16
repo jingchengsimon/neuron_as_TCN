@@ -14,7 +14,7 @@ All reps feed the same small TCNModel (depth=3, filters=32) trained with BCE los
 Comparison metrics: ROC-AUC, PR-AUC, Victor-Purpura distance, input sparsity.
 
 Usage:
-    python 0_feature_diagnostic.py --test_dir /path/to/test/ --n_trials 100
+    python 0_feature_diagnostic.py --test_dir /path/to/L5PC_NMDA_test/ --n_trials 100
 
 Outputs → ./results/0_feature_diagnostic/
 """
@@ -52,6 +52,11 @@ VP_COST_PER_MS = 1.0      # Victor-Purpura cost per ms of spike shift
 REFRACTORY_MS = 3         # minimum inter-spike interval for peak detection
 SPIKE_DECODE_THRESHOLD = 0.5
 SAVE_DIR = './results/0_feature_diagnostic/'
+DEFAULT_DATA_ROOT = (
+    '/G/results/aim2_sjc/Models_TCN/'
+    'Single_Neuron_InOut_SJC_funcgroup2_var2/data'
+)
+DEFAULT_TEST_DIR = os.path.join(DEFAULT_DATA_ROOT, 'L5PC_NMDA_test')
 
 # ---------------------------------------------------------------------------
 # Reproducibility
@@ -627,7 +632,7 @@ def main():
         description='Feature representation diagnostic for TCN spike prediction'
     )
     parser.add_argument('--test_dir', type=str,
-                        default='./data/L5PC_NMDA_test/',
+                        default=DEFAULT_TEST_DIR,
                         help='Directory containing test .p files')
     parser.add_argument('--n_trials', type=int, default=100,
                         help='Number of trials to load (max)')
