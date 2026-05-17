@@ -41,6 +41,7 @@ from utils.visualization_utils import _setup_plot_style
 # Constants
 # ---------------------------------------------------------------------------
 NUM_SEGMENTS_EXC = 639
+NUM_SEGMENTS_INH = 640
 SEED = 42
 SMALL_TCN_DEPTH = 3
 SMALL_TCN_FILTERS = 32
@@ -113,9 +114,17 @@ def victor_purpura_distance(spike_train_a: np.ndarray,
 # ---------------------------------------------------------------------------
 def _spikes_dict_to_binary(spike_dict: dict,
                             num_segments: int,
-                            sim_duration_ms: int) -> np.ndarray:
+                            sim_duration_ms: int,
+                            adjust_exc_sjc_keys: bool = False) -> np.ndarray:
     """
     Convert per-segment spike-time dict to a dense integer count matrix.
+
+    Args:
+        spike_dict: Segment-indexed spike-time dictionary.
+        num_segments: Number of rows in the output segment matrix.
+        sim_duration_ms: Simulation length in milliseconds.
+        adjust_exc_sjc_keys: Whether to convert SJC excitatory keys from
+            1..639 to 0..638.
 
     Returns:
         count_matrix: (num_segments, sim_duration_ms) int16
@@ -123,10 +132,15 @@ def _spikes_dict_to_binary(spike_dict: dict,
     """
     count_matrix = np.zeros((num_segments, sim_duration_ms), dtype=np.int16)
     for seg_idx, spike_times in spike_dict.items():
+        seg_idx = int(seg_idx) - 1 if adjust_exc_sjc_keys else int(seg_idx)
+        if seg_idx < 0 or seg_idx >= num_segments:
+            continue
         if not hasattr(spike_times, '__iter__'):
             continue
         for t in spike_times:
             t_int = int(t)
+            if t_int >= sim_duration_ms:
+                t_int -= 1
             if 0 <= t_int < sim_duration_ms:
                 count_matrix[seg_idx, t_int] += 1
     return count_matrix
@@ -147,7 +161,9 @@ def build_rep_A(exc_dict: dict, inh_dict: dict,
     Returns:
         X: (num_segments_exc + num_segments_inh, sim_duration_ms) float32  # C × T
     """
-    exc_counts = _spikes_dict_to_binary(exc_dict, num_segments_exc, sim_duration_ms)
+    exc_counts = _spikes_dict_to_binary(
+        exc_dict, num_segments_exc, sim_duration_ms, adjust_exc_sjc_keys=True
+    )
     inh_counts = _spikes_dict_to_binary(inh_dict, num_segments_inh, sim_duration_ms)
 
     # FALLBACK: if actual synapse count unavailable, divisor defaults give approx mean
@@ -170,7 +186,9 @@ def build_rep_B(exc_dict: dict, inh_dict: dict,
     Returns:
         X: (num_segments_exc + num_segments_inh, sim_duration_ms) float32  # C × T
     """
-    exc_counts = _spikes_dict_to_binary(exc_dict, num_segments_exc, sim_duration_ms)
+    exc_counts = _spikes_dict_to_binary(
+        exc_dict, num_segments_exc, sim_duration_ms, adjust_exc_sjc_keys=True
+    )
     inh_counts = _spikes_dict_to_binary(inh_dict, num_segments_inh, sim_duration_ms)
 
     exc_bin = np.clip(exc_counts, 0, 1).astype(np.float32)
@@ -201,7 +219,9 @@ def build_rep_C(exc_dict: dict, inh_dict: dict,
     Returns:
         X: (num_segments_exc + num_segments_inh, sim_duration_ms) float32  # C × T
     """
-    exc_counts = _spikes_dict_to_binary(exc_dict, num_segments_exc, sim_duration_ms)
+    exc_counts = _spikes_dict_to_binary(
+        exc_dict, num_segments_exc, sim_duration_ms, adjust_exc_sjc_keys=True
+    )
     inh_counts = _spikes_dict_to_binary(inh_dict, num_segments_inh, sim_duration_ms)
 
     kernel = _causal_exp_kernel(tau_ms)
@@ -318,7 +338,7 @@ def build_arrays(trials, sim_duration_ms: int, rep: str):
         sparsity: mean fraction of zero-valued bins
     """
     X_list, y_list = [], []
-    num_inh = None
+    num_inh = NUM_SEGMENTS_INH
 
     build_fn = {'A': build_rep_A, 'B': build_rep_B, 'C': build_rep_C}[rep]
 
@@ -326,16 +346,7 @@ def build_arrays(trials, sim_duration_ms: int, rep: str):
         exc_dict = sd['exInputSpikeTimes']
         inh_dict = sd['inhInputSpikeTimes']
 
-        # Infer num_segments_inh from data on first trial
-        if num_inh is None:
-            num_inh = max((int(k) for k in inh_dict.keys()), default=110) + 1
-            # Clamp to reasonable range
-            num_inh = max(num_inh, 111)
-
-        if rep == 'A':
-            X = build_fn(exc_dict, inh_dict, NUM_SEGMENTS_EXC, num_inh, sim_duration_ms)
-        else:
-            X = build_fn(exc_dict, inh_dict, NUM_SEGMENTS_EXC, num_inh, sim_duration_ms)
+        X = build_fn(exc_dict, inh_dict, NUM_SEGMENTS_EXC, num_inh, sim_duration_ms)
 
         # Binary spike target
         y = np.zeros(sim_duration_ms, dtype=np.float32)
